@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition, useMemo } from "react";
+import { useState, useRef, useTransition, useMemo, useEffect } from "react";
 import Image from "next/image";
 import type { MatchResult, Team, Player, Division } from "@/lib/types";
 import { getTeamById, getAllTeams, getPlayerById, divisions } from "@/lib/data";
@@ -26,6 +26,46 @@ const getRandomPlayer = (team: Team): Player | null => {
     return roster[Math.floor(Math.random() * roster.length)];
 }
 
+const MatchCard = ({ match }: { match: MatchResult }) => {
+    const homeTeam = getTeamById(match.homeTeamId);
+    const awayTeam = getTeamById(match.awayTeamId);
+    const mvp = match.mvpId ? getPlayerById(match.mvpId) : null;
+
+
+    if (!homeTeam || !awayTeam) return null;
+
+    return (
+      <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center gap-2 sm:gap-4 flex-1">
+          <Image src={homeTeam.logoUrl} alt={homeTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={homeTeam.dataAiHint} />
+          <span className="font-medium text-right w-20 sm:w-32 truncate">{homeTeam.name}</span>
+        </div>
+        <div className="text-center font-bold text-lg mx-2 sm:mx-4">
+          <span>{match.homeScore} - {match.awayScore}</span>
+        </div>
+        <div className="flex items-center gap-2 sm:gap-4 flex-1">
+          <span className="font-medium text-left w-20 sm:w-32 truncate">{awayTeam.name}</span>
+          <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
+        </div>
+        <div className="flex flex-col items-center mx-4 w-28 text-center">
+            {mvp ? (
+                <Badge variant="outline" className="flex items-center gap-1.5">
+                    <Icons.Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                    <span className="font-semibold truncate">{mvp.name}</span>
+                </Badge>
+            ) : <div className="h-6"/>}
+            {mvp && <span className="text-xs text-muted-foreground mt-1">MVP</span>}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => (document.dispatchEvent(new CustomEvent('showPressNotes', { detail: match })))}>
+                <Icons.Press className="h-5 w-5" />
+            </Button>
+        </div>
+      </div>
+    );
+};
+  
+
 export function DashboardClient({ recentMatches: initialMatches }: DashboardClientProps) {
   const [isPending, startTransition] = useTransition();
   const [allMatches, setAllMatches] = useState(initialMatches);
@@ -34,7 +74,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const pressNoteRef = useRef<HTMLDivElement>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
+  const resultsExportRef = useRef<HTMLDivElement>(null);
 
   const maxWeek = useMemo(() => allMatches.reduce((max, m) => Math.max(max, m.week), 0), [allMatches]);
   const [displayedWeek, setDisplayedWeek] = useState(maxWeek);
@@ -62,7 +102,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
   };
   
   const handleDownloadResults = async () => {
-    if (!resultsRef.current) return;
+    if (!resultsExportRef.current) return;
     
     toast({
         title: 'Generando Imagen...',
@@ -70,7 +110,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
     });
 
     try {
-        const canvas = await html2canvas(resultsRef.current, {
+        const canvas = await html2canvas(resultsExportRef.current, {
             useCORS: true,
             backgroundColor: null, 
         });
@@ -129,6 +169,18 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
     }
     setIsLoading(false);
   };
+  
+    // Effect to listen for custom event
+    useEffect(() => {
+        const listener = (event: Event) => {
+            const match = (event as CustomEvent).detail;
+            handleShowPressNotes(match);
+        };
+        document.addEventListener('showPressNotes', listener);
+        return () => {
+            document.removeEventListener('showPressNotes', listener);
+        };
+    }, []);
 
   const handleSimulateMatchday = () => {
     startTransition(() => {
@@ -189,45 +241,6 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
         })
     });
 };
-
-  const MatchCard = ({ match }: { match: MatchResult }) => {
-    const homeTeam = getTeamById(match.homeTeamId);
-    const awayTeam = getTeamById(match.awayTeamId);
-    const mvp = match.mvpId ? getPlayerById(match.mvpId) : null;
-
-
-    if (!homeTeam || !awayTeam) return null;
-
-    return (
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-2 sm:gap-4 flex-1">
-          <Image src={homeTeam.logoUrl} alt={homeTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={homeTeam.dataAiHint} />
-          <span className="font-medium text-right w-20 sm:w-32 truncate">{homeTeam.name}</span>
-        </div>
-        <div className="text-center font-bold text-lg mx-2 sm:mx-4">
-          <span>{match.homeScore} - {match.awayScore}</span>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-4 flex-1">
-          <span className="font-medium text-left w-20 sm:w-32 truncate">{awayTeam.name}</span>
-          <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
-        </div>
-        <div className="flex flex-col items-center mx-4 w-28 text-center">
-            {mvp ? (
-                <Badge variant="outline" className="flex items-center gap-1.5">
-                    <Icons.Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                    <span className="font-semibold truncate">{mvp.name}</span>
-                </Badge>
-            ) : <div className="h-6"/>}
-            {mvp && <span className="text-xs text-muted-foreground mt-1">MVP</span>}
-        </div>
-        <div className="flex flex-col sm:flex-row gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleShowPressNotes(match)}>
-                <Icons.Press className="h-5 w-5" />
-            </Button>
-        </div>
-      </div>
-    );
-  };
   
   const PressNoteContent = () => {
     if (isLoading) {
@@ -275,7 +288,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                       <Icons.ChevronLeft className="h-4 w-4" />
                   </Button>
                   <Badge variant="secondary" className="text-sm px-4 py-2 h-10">Jornada {displayedWeek}</Badge>
-                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => w + 1)} disabled={isPending}>
+                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => w + 1)} disabled={isPending || displayedWeek >= maxWeek}>
                       <Icons.ChevronRight className="h-4 w-4" />
                   </Button>
               </div>
@@ -284,7 +297,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
               </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-0" ref={resultsRef}>
+        <CardContent className="p-0">
             <ScrollArea className="h-[400px]">
                 {matchesForDisplayedWeek.length > 0 ? matchesForDisplayedWeek.map((match) => (
                     <MatchCard key={match.id} match={match} />
@@ -296,6 +309,22 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
             </ScrollArea>
         </CardContent>
       </Card>
+      
+      {/* Hidden container for export */}
+      <div className="absolute -z-10 -left-[9999px] top-0">
+        <div ref={resultsExportRef} className="bg-card p-4">
+            <div className="flex flex-col">
+              {matchesForDisplayedWeek.length > 0 ? matchesForDisplayedWeek.map((match) => (
+                  <MatchCard key={`export-${match.id}`} match={match} />
+              )) : (
+                <div className="flex items-center justify-center h-40 text-muted-foreground p-8">
+                  No hay partidos para esta jornada y división.
+                </div>
+              )}
+            </div>
+        </div>
+      </div>
+
 
       <Dialog open={!!selectedMatch} onOpenChange={(isOpen) => !isOpen && setSelectedMatch(null)}>
         <DialogContent className="sm:max-w-[600px]">
@@ -339,5 +368,3 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
     </div>
   );
 }
-
-    

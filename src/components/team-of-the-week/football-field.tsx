@@ -12,14 +12,14 @@ interface FootballFieldProps {
 }
 
 const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
-    <div className="relative flex flex-col items-center">
+    <div className="relative flex flex-col items-center w-24">
       <div
         className="h-16 w-16 rounded-full border-2 border-white bg-gray-200 bg-cover bg-center drop-shadow-lg"
         style={{ backgroundImage: `url(${player.teamLogoUrl})` }}
       ></div>
-      <div className="relative -mt-4">
+      <div className="relative -mt-3 w-auto">
         <p
-            className="whitespace-nowrap rounded-md bg-white px-2 py-0.5 text-center text-xs font-bold text-black"
+            className="whitespace-nowrap rounded-md bg-white px-2 py-0.5 text-center text-xs font-bold text-black shadow-lg"
         >
             {player.name}
         </p>
