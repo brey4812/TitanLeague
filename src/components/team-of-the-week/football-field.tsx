@@ -23,15 +23,14 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
         data-ai-hint={player.teamDataAiHint}
       />
     </div>
-    <div className="mt-1 w-full flex flex-col items-center justify-center">
-      <div className="bg-black/50 rounded-full px-2 py-0.5 shadow-lg w-20 truncate">
-        <p className="text-white text-xs font-bold text-center">{player.name}</p>
-      </div>
-      <div className="mt-1">
-        <Badge variant="secondary" className="text-[10px] leading-tight">
-          {player.position}
-        </Badge>
-      </div>
+    {/* This simplified structure is more robust for html2canvas rendering */}
+    <div className="mt-1 w-full text-center">
+        <p 
+          className="text-white text-xs font-bold truncate"
+          style={{ textShadow: '0px 1px 3px rgba(0, 0, 0, 0.7)' }}
+        >
+          {player.name}
+        </p>
     </div>
   </div>
 );
