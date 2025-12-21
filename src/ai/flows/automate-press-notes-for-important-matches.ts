@@ -46,7 +46,7 @@ const pressNotesPrompt = ai.definePrompt({
   output: {schema: GeneratePressNotesOutputSchema},
   prompt: `Eres un periodista deportivo creando una nota de prensa estilo "VERSUS" para un partido clave.
 
-  Basándote en la siguiente información, genera notas de prensa atractivas e informativas que destaquen las estadísticas y las historias clave. El tono debe ser emocionante y crear expectación para el partido. La nota de prensa debe estar en español.
+  Basándote en la siguiente información, genera notas de prensa atractivas e informativas que destaquen las estadísticas y las historias clave. El tono debe ser emocionante y crear expectación para el partido. La nota de prensa debe estar en español y ser concisa (2-3 párrafos como máximo).
 
   Tipo de Partido: {{{matchType}}}
 

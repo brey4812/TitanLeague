@@ -12,6 +12,7 @@ import { generatePressNotes } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import html2canvas from 'html2canvas';
+import { ScrollArea } from "../ui/scroll-area";
 
 interface DashboardClientProps {
   recentMatches: MatchResult[];
@@ -142,34 +143,36 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
       </Card>
 
       <Dialog open={!!selectedMatch} onOpenChange={(isOpen) => !isOpen && setSelectedMatch(null)}>
-        <DialogContent className="sm:max-w-[600px] p-0">
-          <div ref={pressNoteRef} className="p-6">
-            <DialogHeader>
-                {homeTeam && awayTeam && (
-                    <DialogTitle className="text-center text-2xl font-headline">
-                        <div className="flex justify-around items-center">
-                            <div className="flex flex-col items-center gap-2 text-center">
-                                <Image src={homeTeam.logoUrl} alt={homeTeam.name} width={60} height={60} className="rounded-full" data-ai-hint={homeTeam.dataAiHint}/>
-                                <span className="text-base">{homeTeam.name}</span>
-                            </div>
-                            <span className="text-4xl font-black text-primary mx-2">VS</span>
-                            <div className="flex flex-col items-center gap-2 text-center">
-                                <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={60} height={60} className="rounded-full" data-ai-hint={awayTeam.dataAiHint}/>
-                                <span className="text-base">{awayTeam.name}</span>
-                            </div>
-                        </div>
-                    </DialogTitle>
-                )}
-            </DialogHeader>
-             {selectedMatch && (
-              <div className="text-center font-bold text-3xl my-4">
-                <span>{selectedMatch.homeScore} - {selectedMatch.awayScore}</span>
-              </div>
-            )}
-            <PressNoteContent />
-          </div>
+        <DialogContent className="sm:max-w-[600px]">
+          <ScrollArea className="max-h-[80vh]">
+            <div ref={pressNoteRef} className="p-6">
+              <DialogHeader>
+                  {homeTeam && awayTeam && (
+                      <DialogTitle className="text-center text-2xl font-headline">
+                          <div className="flex justify-around items-center">
+                              <div className="flex flex-col items-center gap-2 text-center">
+                                  <Image src={homeTeam.logoUrl} alt={homeTeam.name} width={60} height={60} className="rounded-full" data-ai-hint={homeTeam.dataAiHint}/>
+                                  <span className="text-base">{homeTeam.name}</span>
+                              </div>
+                              <span className="text-4xl font-black text-primary mx-2">VS</span>
+                              <div className="flex flex-col items-center gap-2 text-center">
+                                  <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={60} height={60} className="rounded-full" data-ai-hint={awayTeam.dataAiHint}/>
+                                  <span className="text-base">{awayTeam.name}</span>
+                              </div>
+                          </div>
+                      </DialogTitle>
+                  )}
+              </DialogHeader>
+               {selectedMatch && (
+                <div className="text-center font-bold text-3xl my-4">
+                  <span>{selectedMatch.homeScore} - {selectedMatch.awayScore}</span>
+                </div>
+              )}
+              <PressNoteContent />
+            </div>
+          </ScrollArea>
           {!isLoading && pressNotes && (
-            <DialogFooter className="p-6 bg-muted/50">
+            <DialogFooter className="p-6 pt-0 border-t">
               <Button onClick={handleDownloadPressNotes}>
                 <Icons.Download className="mr-2 h-4 w-4" />
                 Descargar
