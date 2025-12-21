@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/toaster';
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { SiteHeader } from "@/components/layout/site-header";
 

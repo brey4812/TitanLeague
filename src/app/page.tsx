@@ -12,7 +12,7 @@ export default function DashboardPage() {
   const stats = [
     { title: "Total Teams", value: totalTeams, icon: <Icons.Teams className="h-6 w-6 text-muted-foreground" /> },
     { title: "Total Players", value: totalPlayers, icon: <Icons.Users className="h-6 w-6 text-muted-foreground" /> },
-    { title: "Total Goals Scored", value: totalGoals, icon: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-goal h-6 w-6 text-muted-foreground"><path d="M12 13V2l8 4-8 4"/><path d="M12 2L4 6l8 4"/><path d="M12 13v8"/><path d="M17 15.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/><path d="M12 13h- hükümet"/><path d="M12 13h8"/></svg> },
+    { title: "Total Goals Scored", value: totalGoals, icon: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-goal h-6 w-6 text-muted-foreground"><path d="M12 13V2l8 4-8 4"/><path d="M12 2L4 6l8 4"/><path d="M12 13v8"/><path d="M17 15.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/><path d="M12 13h-8"/><path d="M12 13h8"/></svg> },
     { title: "Seasons Simulated", value: "1 / 10", icon: <Icons.League className="h-6 w-6 text-muted-foreground" /> },
   ];
 

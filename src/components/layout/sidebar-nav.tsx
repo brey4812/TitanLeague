@@ -40,19 +40,17 @@ export function SidebarNav() {
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <Link href={item.href} legacyBehavior passHref>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === item.href}
-                  tooltip={{ children: item.label }}
-                  className="justify-start"
-                >
-                  <a>
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </a>
-                </SidebarMenuButton>
-              </Link>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === item.href}
+                tooltip={{ children: item.label }}
+                className="justify-start"
+              >
+                <Link href={item.href}>
+                  <item.icon />
+                  <span>{item.label}</span>
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
@@ -60,19 +58,17 @@ export function SidebarNav() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-             <Link href="/settings" legacyBehavior passHref>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === "/settings"}
-                  tooltip={{ children: "Settings" }}
-                  className="justify-start"
-                >
-                  <a>
-                    <Icons.Settings />
-                    <span>Settings</span>
-                  </a>
-                </SidebarMenuButton>
-              </Link>
+             <SidebarMenuButton
+                asChild
+                isActive={pathname === "/settings"}
+                tooltip={{ children: "Settings" }}
+                className="justify-start"
+              >
+                <Link href="/settings">
+                  <Icons.Settings />
+                  <span>Settings</span>
+                </Link>
+              </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
