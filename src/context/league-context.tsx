@@ -4,7 +4,7 @@
 import { createContext, useState, ReactNode, useCallback } from "react";
 import { Team, Division, MatchResult, Player, TeamOfTheWeekPlayer } from "@/lib/types";
 import { initialTeams, initialDivisions, initialMatchResults } from "@/lib/data";
-import produce from "immer";
+import { produce } from "immer";
 
 interface LeagueContextType {
   teams: Team[];
