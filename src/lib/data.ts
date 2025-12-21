@@ -1,11 +1,13 @@
 import type { Team, Division, MatchResult, Player, TeamOfTheWeekPlayer } from '@/lib/types';
 
+let playerIdCounter = 0;
+
 const generatePlayers = (teamId: number, position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward', count: number, namePrefix: string): Player[] => {
   const players: Player[] = [];
   const nationalities = ['Brazilian', 'Argentinian', 'German', 'French', 'Spanish', 'Italian', 'English', 'Dutch', 'Portuguese', 'Belgian'];
   for (let i = 1; i <= count; i++) {
     players.push({
-      id: teamId * 100 + players.length,
+      id: playerIdCounter++,
       name: `${namePrefix} ${i}`,
       nationality: nationalities[Math.floor(Math.random() * nationalities.length)],
       position: position,
