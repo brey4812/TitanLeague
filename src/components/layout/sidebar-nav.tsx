@@ -19,6 +19,7 @@ const navItems = [
   { href: "/", icon: Icons.Dashboard, label: "Panel" },
   { href: "/leagues", icon: Icons.League, label: "Ligas" },
   { href: "/teams", icon: Icons.Teams, label: "Equipos" },
+  { href: "/team-of-the-week", icon: Icons.Star, label: "11 de la Jornada" },
   { href: "/tournaments", icon: Icons.Tournaments, label: "Torneos" },
   { href: "/stats", icon: Icons.Stats, label: "Estadísticas" },
   { href: "/h2h", icon: Icons.H2H, label: "H2H" },

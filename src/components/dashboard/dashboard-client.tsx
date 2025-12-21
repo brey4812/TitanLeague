@@ -2,8 +2,8 @@
 
 import { useState, useRef, useTransition } from "react";
 import Image from "next/image";
-import type { MatchResult, Team, TeamOfTheWeekPlayer, Player } from "@/lib/types";
-import { getTeamById, getAllTeams, getPlayerById, getTeamOfTheWeek } from "@/lib/data";
+import type { MatchResult, Team, Player } from "@/lib/types";
+import { getTeamById, getAllTeams, getPlayerById } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -14,7 +14,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import html2canvas from 'html2canvas';
 import { ScrollArea } from "../ui/scroll-area";
 import { Badge } from "../ui/badge";
-import { TeamOfTheWeek } from "./team-of-the-week";
 
 interface DashboardClientProps {
   recentMatches: MatchResult[];
@@ -127,19 +126,13 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                 const [homeTeam, awayTeam] = teamPair;
                 existingPairs.push([homeTeam.id, awayTeam.id]);
                 
-                const homePlayer = getRandomPlayer(homeTeam);
-                const awayPlayer = getRandomPlayer(awayTeam);
-                
                 let mvpPlayer = null;
                 if(Math.random() > 0.5){
-                    mvpPlayer = homePlayer;
+                  const homePlayer = getRandomPlayer(homeTeam);
+                  mvpPlayer = homePlayer;
                 } else {
-                    mvpPlayer = awayPlayer;
-                }
-                
-                // Fallback if one of the players is null
-                if(!mvpPlayer){
-                    mvpPlayer = homePlayer || awayPlayer;
+                  const awayPlayer = getRandomPlayer(awayTeam);
+                  mvpPlayer = awayPlayer;
                 }
                 
                 newMatches.push({
@@ -225,7 +218,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <Card className="lg:col-span-2">
+      <Card className="lg:col-span-3">
         <CardHeader className="flex-row items-center justify-between">
           <div className="flex items-center gap-4">
             <CardTitle>Resultados Recientes</CardTitle>
@@ -243,8 +236,6 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
             </ScrollArea>
         </CardContent>
       </Card>
-
-      <TeamOfTheWeek initialWeek={currentWeek}/>
 
       <Dialog open={!!selectedMatch} onOpenChange={(isOpen) => !isOpen && setSelectedMatch(null)}>
         <DialogContent className="sm:max-w-[600px]">
@@ -288,5 +279,3 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
     </div>
   );
 }
-
-    
