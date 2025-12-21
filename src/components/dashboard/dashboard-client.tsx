@@ -145,9 +145,17 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                 const homeTeam = Math.random() > 0.5 ? team1 : team2;
                 const awayTeam = homeTeam.id === team1.id ? team2 : team1;
 
+                const homeScore = Math.floor(Math.random() * 5);
+                const awayScore = Math.floor(Math.random() * 5);
+                
                 let mvpPlayer = null;
-                const winningTeam = Math.random() > 0.5 ? homeTeam : awayTeam;
-                mvpPlayer = getRandomPlayer(winningTeam);
+                if (homeScore > awayScore) {
+                    mvpPlayer = getRandomPlayer(homeTeam);
+                } else if (awayScore > homeScore) {
+                    mvpPlayer = getRandomPlayer(awayTeam);
+                } else {
+                    mvpPlayer = getRandomPlayer(Math.random() > 0.5 ? homeTeam : awayTeam);
+                }
                 
                 newMatches.push({
                     id: latestId + matchCounter + 1,
@@ -155,8 +163,8 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                     week: newWeek,
                     homeTeamId: homeTeam.id,
                     awayTeamId: awayTeam.id,
-                    homeScore: Math.floor(Math.random() * 5),
-                    awayScore: Math.floor(Math.random() * 5),
+                    homeScore: homeScore,
+                    awayScore: awayScore,
                     isImportant: Math.random() > 0.7,
                     mvpId: mvpPlayer?.id,
                 });
