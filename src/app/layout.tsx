@@ -23,7 +23,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body className={cn("font-body antialiased", "bg-background text-foreground")}>
+      <body className={cn("font-body antialiased", "bg-background text-foreground")} suppressHydrationWarning>
         <SidebarProvider>
             <SidebarNav />
             <div className="md:ml-[var(--sidebar-width-icon)] lg:ml-[var(--sidebar-width)] group-data-[collapsible=icon]:md:ml-[var(--sidebar-width-icon)] transition-[margin-left] duration-300 ease-in-out">
