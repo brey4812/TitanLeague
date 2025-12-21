@@ -31,6 +31,8 @@ export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
     };
 
     const handleNextWeek = () => {
+        // We don't know the max week, so we allow going forward.
+        // The data function will handle providing players.
         setWeek(w => w + 1);
     };
     
@@ -38,7 +40,7 @@ export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
         if (!fieldRef.current) return;
         const canvas = await html2canvas(fieldRef.current, {
             useCORS: true,
-            backgroundColor: '#15803d', // a dark green color from tailwind green-700
+            backgroundColor: '#16a34a', // tailwind green-600
         });
         const link = document.createElement('a');
         link.download = `11-de-la-jornada-${week}.png`;
@@ -51,7 +53,7 @@ export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
     const midfielders = team.filter(p => p.position === 'Midfielder');
     const forwards = team.filter(p => p.position === 'Forward');
 
-    // Simple 4-3-3 formation
+    // Ensure we have a 4-3-3 formation
     const formation = {
         goalkeeper: goalkeepers.slice(0, 1),
         defenders: defenders.slice(0, 4),
