@@ -251,7 +251,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-       <Card className="lg:col-span-3" ref={resultsRef}>
+       <Card className="lg:col-span-3">
         <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <CardTitle>Resultados</CardTitle>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
@@ -284,7 +284,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
               </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0" ref={resultsRef}>
             <ScrollArea className="h-[400px]">
                 {matchesForDisplayedWeek.length > 0 ? matchesForDisplayedWeek.map((match) => (
                     <MatchCard key={match.id} match={match} />
@@ -339,3 +339,5 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
     </div>
   );
 }
+
+    
