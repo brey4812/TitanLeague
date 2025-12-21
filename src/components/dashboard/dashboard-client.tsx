@@ -157,11 +157,9 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
           <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
         </div>
         <div className="flex flex-col sm:flex-row gap-1">
-            {match.isImportant && (
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleShowPressNotes(match)}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleShowPressNotes(match)}>
                 <Icons.Press className="h-5 w-5" />
-              </Button>
-            )}
+            </Button>
         </div>
       </div>
     );
