@@ -12,21 +12,21 @@ const generatePlayers = (teamId: number, position: 'Goalkeeper' | 'Defender' | '
       nationality: nationalities[Math.floor(Math.random() * nationalities.length)],
       position: position,
       stats: {
-        goals: Math.floor(Math.random() * (position === 'Forward' ? 20 : 5)),
-        assists: Math.floor(Math.random() * 15),
-        cleanSheets: position === 'Goalkeeper' ? Math.floor(Math.random() * 10) : 0,
-        cards: { yellow: Math.floor(Math.random() * 10), red: Math.floor(Math.random() * 2) },
-        mvp: Math.floor(Math.random() * 5),
+        goals: 0,
+        assists: 0,
+        cleanSheets: 0,
+        cards: { yellow: 0, red: 0 },
+        mvp: 0,
       },
     });
   }
   return players;
 };
 
-const teams: Team[] = [
+export const initialTeams: Team[] = [
   {
     id: 1, name: 'Crimson Hawks', logoUrl: 'https://picsum.photos/seed/1/100/100', dataAiHint: 'hawk bird', division: 1, divisionName: 'Titan Prime Division',
-    stats: { wins: 18, draws: 8, losses: 4, goalsFor: 55, goalsAgainst: 25 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
       ...generatePlayers(1, 'Goalkeeper', 2, 'GK'),
       ...generatePlayers(1, 'Defender', 7, 'DF'),
@@ -36,7 +36,7 @@ const teams: Team[] = [
   },
   {
     id: 2, name: 'Azure Dragons', logoUrl: 'https://picsum.photos/seed/2/100/100', dataAiHint: 'dragon simple', division: 1, divisionName: 'Titan Prime Division',
-    stats: { wins: 20, draws: 5, losses: 5, goalsFor: 65, goalsAgainst: 30 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
       ...generatePlayers(2, 'Goalkeeper', 2, 'GK'),
       ...generatePlayers(2, 'Defender', 7, 'DF'),
@@ -46,7 +46,7 @@ const teams: Team[] = [
   },
   {
     id: 3, name: 'Golden Lions', logoUrl: 'https://picsum.photos/seed/3/100/100', dataAiHint: 'lion head', division: 1, divisionName: 'Titan Prime Division',
-    stats: { wins: 15, draws: 10, losses: 5, goalsFor: 45, goalsAgainst: 35 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(3, 'Goalkeeper', 2, 'Keeper'),
         ...generatePlayers(3, 'Defender', 6, 'Guard'),
@@ -56,7 +56,7 @@ const teams: Team[] = [
   },
   {
     id: 4, name: 'Shadow Wolves', logoUrl: 'https://picsum.photos/seed/4/100/100', dataAiHint: 'wolf silhouette', division: 1, divisionName: 'Titan Prime Division',
-    stats: { wins: 12, draws: 10, losses: 8, goalsFor: 40, goalsAgainst: 38 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(4, 'Goalkeeper', 2, 'GK'),
         ...generatePlayers(4, 'Defender', 7, 'DF'),
@@ -66,7 +66,7 @@ const teams: Team[] = [
   },
   {
     id: 5, name: 'Steel Knights', logoUrl: 'https://picsum.photos/seed/5/100/100', dataAiHint: 'knight helmet', division: 2, divisionName: 'Second Division',
-    stats: { wins: 22, draws: 4, losses: 4, goalsFor: 70, goalsAgainst: 28 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(5, 'Goalkeeper', 2, 'GK'),
         ...generatePlayers(5, 'Defender', 7, 'DF'),
@@ -76,7 +76,7 @@ const teams: Team[] = [
   },
   {
     id: 6, name: 'Phoenix Rising', logoUrl: 'https://picsum.photos/seed/6/100/100', dataAiHint: 'phoenix fire', division: 2, divisionName: 'Second Division',
-    stats: { wins: 19, draws: 6, losses: 5, goalsFor: 60, goalsAgainst: 32 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(6, 'Goalkeeper', 2, 'GK'),
         ...generatePlayers(6, 'Defender', 7, 'DF'),
@@ -86,7 +86,7 @@ const teams: Team[] = [
   },
   {
     id: 7, name: 'Arctic Bears', logoUrl: 'https://picsum.photos/seed/7/100/100', dataAiHint: 'polar bear', division: 2, divisionName: 'Second Division',
-    stats: { wins: 14, draws: 9, losses: 7, goalsFor: 50, goalsAgainst: 40 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(7, 'Goalkeeper', 2, 'GK'),
         ...generatePlayers(7, 'Defender', 7, 'DF'),
@@ -96,7 +96,7 @@ const teams: Team[] = [
   },
   {
     id: 8, name: 'Thunder Strikers', logoUrl: 'https://picsum.photos/seed/8/100/100', dataAiHint: 'lightning bolt', division: 2, divisionName: 'Second Division',
-    stats: { wins: 10, draws: 12, losses: 8, goalsFor: 42, goalsAgainst: 45 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(8, 'Goalkeeper', 2, 'GK'),
         ...generatePlayers(8, 'Defender', 7, 'DF'),
@@ -106,7 +106,7 @@ const teams: Team[] = [
   },
   {
     id: 9, name: 'Forest Rangers', logoUrl: 'https://picsum.photos/seed/9/100/100', dataAiHint: 'pine tree', division: 3, divisionName: 'Third Division',
-    stats: { wins: 25, draws: 2, losses: 3, goalsFor: 80, goalsAgainst: 20 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(9, 'Goalkeeper', 2, 'GK'),
         ...generatePlayers(9, 'Defender', 7, 'DF'),
@@ -116,7 +116,7 @@ const teams: Team[] = [
   },
   {
     id: 10, name: 'Ocean Giants', logoUrl: 'https://picsum.photos/seed/10/100/100', dataAiHint: 'ocean wave', division: 3, divisionName: 'Third Division',
-    stats: { wins: 1, draws: 1, losses: 28, goalsFor: 15, goalsAgainst: 90 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(10, 'Goalkeeper', 2, 'GK'),
         ...generatePlayers(10, 'Defender', 7, 'DF'),
@@ -126,7 +126,7 @@ const teams: Team[] = [
   },
   {
     id: 11, name: 'Desert Scorpions', logoUrl: 'https://picsum.photos/seed/11/100/100', dataAiHint: 'scorpion icon', division: 4, divisionName: 'Fourth Division',
-    stats: { wins: 10, draws: 10, losses: 10, goalsFor: 35, goalsAgainst: 35 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(11, 'Goalkeeper', 2, 'GK'),
         ...generatePlayers(11, 'Defender', 7, 'DF'),
@@ -136,7 +136,7 @@ const teams: Team[] = [
   },
   {
     id: 12, name: 'Volcano Vipers', logoUrl: 'https://picsum.photos/seed/12/100/100', dataAiHint: 'snake fangs', division: 4, divisionName: 'Fourth Division',
-    stats: { wins: 14, draws: 8, losses: 8, goalsFor: 48, goalsAgainst: 40 },
+    stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
     roster: [
         ...generatePlayers(12, 'Goalkeeper', 2, 'GK'),
         ...generatePlayers(12, 'Defender', 7, 'DF'),
@@ -146,73 +146,11 @@ const teams: Team[] = [
   }
 ];
 
-export const divisions: Division[] = [
-  { id: 1, name: 'Titan Prime Division', teams: teams.filter(t => t.division === 1) },
-  { id: 2, name: 'Second Division', teams: teams.filter(t => t.division === 2) },
-  { id: 3, name: 'Third Division', teams: teams.filter(t => t.division === 3) },
-  { id: 4, name: 'Fourth Division', teams: teams.filter(t => t.division === 4) },
+export const initialDivisions: Division[] = [
+  { id: 1, name: 'Titan Prime Division', teams: initialTeams.filter(t => t.division === 1) },
+  { id: 2, name: 'Second Division', teams: initialTeams.filter(t => t.division === 2) },
+  { id: 3, name: 'Third Division', teams: initialTeams.filter(t => t.division === 3) },
+  { id: 4, name: 'Fourth Division', teams: initialTeams.filter(t => t.division === 4) },
 ];
 
-export const matchResults: MatchResult[] = [
-  { id: 1, season: 1, week: 5, homeTeamId: 1, awayTeamId: 2, homeScore: 2, awayScore: 2, isImportant: true, mvpId: 104 },
-  { id: 2, season: 1, week: 5, homeTeamId: 3, awayTeamId: 4, homeScore: 1, awayScore: 0, isImportant: false, mvpId: 302 },
-  { id: 3, season: 1, week: 5, homeTeamId: 5, awayTeamId: 6, homeScore: 3, awayScore: 1, isImportant: false, mvpId: 504 },
-  { id: 4, season: 1, week: 5, homeTeamId: 7, awayTeamId: 8, homeScore: 0, awayScore: 0, isImportant: false, mvpId: 701 },
-];
-
-export const getAllTeams = (): Team[] => teams;
-
-export const getTeamById = (id: number): Team | undefined => teams.find(t => t.id === id);
-
-export const getTeamByPlayerId = (playerId: number): Team | undefined => {
-    return teams.find(team => team.roster.some(player => player.id === playerId));
-};
-
-export const getAllPlayers = (): Player[] => teams.flatMap(t => t.roster);
-
-export const getPlayerById = (id: number): Player | undefined => getAllPlayers().find(p => p.id === id);
-
-// seeded random number generator
-const mulberry32 = (a: number) => {
-    return () => {
-      a |= 0; a = a + 0x6D2B79F5 | 0;
-      let t = Math.imul(a ^ a >>> 15, 1 | a);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    }
-}
-
-export const getTeamOfTheWeek = (week: number): TeamOfTheWeekPlayer[] => {
-    const allPlayers = getAllPlayers();
-    const rng = mulberry32(week); // Use week as seed for deterministic results
-
-    const shuffle = (array: Player[]) => {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(rng() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
-        return array;
-    };
-    
-    const goalkeepers = shuffle(allPlayers.filter(p => p.position === 'Goalkeeper'));
-    const defenders = shuffle(allPlayers.filter(p => p.position === 'Defender'));
-    const midfielders = shuffle(allPlayers.filter(p => p.position === 'Midfielder'));
-    const forwards = shuffle(allPlayers.filter(p => p.position === 'Forward'));
-
-    const totwPlayers = [
-        ...goalkeepers.slice(0, 1),
-        ...defenders.slice(0, 4),
-        ...midfielders.slice(0, 3),
-        ...forwards.slice(0, 3)
-    ];
-    
-    return totwPlayers.map(player => {
-        const team = getTeamByPlayerId(player.id);
-        return {
-            ...player,
-            teamName: team?.name || 'Unknown',
-            teamLogoUrl: team?.logoUrl || '',
-            teamDataAiHint: team?.dataAiHint || '',
-        }
-    })
-};
+export const initialMatchResults: MatchResult[] = [];

@@ -1,9 +1,18 @@
+"use client";
+import { useContext } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { divisions } from "@/lib/data";
 import { LeagueTableClient } from "@/components/leagues/league-table-client";
+import { LeagueContext } from "@/context/league-context";
+
 
 export default function LeaguesPage() {
+  const { divisions } = useContext(LeagueContext);
+
+  if (!divisions.length) {
+    return <div>Cargando...</div>
+  }
+
   return (
     <>
       <PageHeader

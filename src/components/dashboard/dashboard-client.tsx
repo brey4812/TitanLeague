@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useRef, useTransition, useMemo, useEffect } from "react";
+import { useState, useRef, useTransition, useMemo, useEffect, useContext } from "react";
 import Image from "next/image";
-import type { MatchResult, Team, Player, Division } from "@/lib/types";
-import { getTeamById, getAllTeams, getPlayerById, divisions } from "@/lib/data";
+import type { MatchResult, Team, Player } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -15,22 +14,12 @@ import html2canvas from 'html2canvas';
 import { ScrollArea } from "../ui/scroll-area";
 import { Badge } from "../ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LeagueContext } from "@/context/league-context";
 
-interface DashboardClientProps {
-  recentMatches: MatchResult[];
-}
-
-const getRandomPlayer = (team: Team): Player | null => {
-    if (!team || !team.roster || team.roster.length === 0) return null;
-    const roster = team.roster;
-    return roster[Math.floor(Math.random() * roster.length)];
-}
-
-const MatchCard = ({ match }: { match: MatchResult }) => {
+const MatchCard = ({ match, getTeamById, getPlayerById }: { match: MatchResult, getTeamById: (id: number) => Team | undefined, getPlayerById: (id: number) => Player | undefined }) => {
     const homeTeam = getTeamById(match.homeTeamId);
     const awayTeam = getTeamById(match.awayTeamId);
     const mvp = match.mvpId ? getPlayerById(match.mvpId) : null;
-
 
     if (!homeTeam || !awayTeam) return null;
 
@@ -66,9 +55,9 @@ const MatchCard = ({ match }: { match: MatchResult }) => {
 };
   
 
-export function DashboardClient({ recentMatches: initialMatches }: DashboardClientProps) {
+export function DashboardClient() {
+  const { matches, divisions, getTeamById, getPlayerById, simulateMatchday } = useContext(LeagueContext);
   const [isPending, startTransition] = useTransition();
-  const [allMatches, setAllMatches] = useState(initialMatches);
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
   const [pressNotes, setPressNotes] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -76,25 +65,38 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
   const pressNoteRef = useRef<HTMLDivElement>(null);
   const resultsExportRef = useRef<HTMLDivElement>(null);
 
-  const maxWeek = useMemo(() => allMatches.reduce((max, m) => Math.max(max, m.week), 0), [allMatches]);
+  const maxWeek = useMemo(() => matches.reduce((max, m) => Math.max(max, m.week), 0), [matches]);
   const [displayedWeek, setDisplayedWeek] = useState(maxWeek);
-  const [displayedDivision, setDisplayedDivision] = useState<string>(String(divisions[0].id));
+  const [displayedDivision, setDisplayedDivision] = useState<string>(String(divisions[0]?.id || '1'));
+  
+  useEffect(() => {
+    setDisplayedWeek(maxWeek);
+  }, [maxWeek]);
+  
+  useEffect(() => {
+    if (divisions.length > 0) {
+      setDisplayedDivision(String(divisions[0].id))
+    }
+  }, [divisions])
+
 
   const matchesForDisplayedWeek = useMemo(() => {
     const divisionId = parseInt(displayedDivision);
-    return allMatches
+    if (isNaN(divisionId)) return [];
+    
+    return matches
       .filter(m => {
         const homeTeam = getTeamById(m.homeTeamId);
         return m.week === displayedWeek && homeTeam?.division === divisionId;
       })
       .sort((a,b) => b.id - a.id);
-  }, [allMatches, displayedWeek, displayedDivision]);
+  }, [matches, displayedWeek, displayedDivision, getTeamById]);
 
 
   const handleDownloadPressNotes = async () => {
     if (!pressNoteRef.current) return;
     
-    const canvas = await html2canvas(pressNoteRef.current);
+    const canvas = await html2canvas(pressNoteRef.current, { useCORS: true });
     const link = document.createElement('a');
     link.download = `press-notes-${selectedMatch?.id}.png`;
     link.href = canvas.toDataURL('image/png');
@@ -180,61 +182,13 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
         return () => {
             document.removeEventListener('showPressNotes', listener);
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
   const handleSimulateMatchday = () => {
     startTransition(() => {
-        const newMatches: MatchResult[] = [];
         const newWeek = maxWeek + 1;
-        const latestId = allMatches.reduce((max, m) => Math.max(max, m.id), 0);
-        let matchCounter = 0;
-
-        divisions.forEach(division => {
-            const teamsInDivision = [...division.teams];
-            const pairedTeamIds = new Set<number>();
-
-            while (teamsInDivision.length >= 2) {
-                const team1Index = Math.floor(Math.random() * teamsInDivision.length);
-                const team1 = teamsInDivision.splice(team1Index, 1)[0];
-                
-                const team2Index = Math.floor(Math.random() * teamsInDivision.length);
-                const team2 = teamsInDivision.splice(team2Index, 1)[0];
-
-                if (!team1 || !team2) continue;
-
-                const homeTeam = Math.random() > 0.5 ? team1 : team2;
-                const awayTeam = homeTeam.id === team1.id ? team2 : team1;
-
-                const homeScore = Math.floor(Math.random() * 5);
-                const awayScore = Math.floor(Math.random() * 5);
-                
-                let mvpPlayer: Player | null = null;
-                if (homeScore > awayScore) {
-                    mvpPlayer = getRandomPlayer(homeTeam);
-                } else if (awayScore > homeScore) {
-                    mvpPlayer = getRandomPlayer(awayTeam);
-                } else {
-                    mvpPlayer = getRandomPlayer(Math.random() > 0.5 ? homeTeam : awayTeam);
-                }
-                
-                newMatches.push({
-                    id: latestId + matchCounter + 1,
-                    season: 1,
-                    week: newWeek,
-                    homeTeamId: homeTeam.id,
-                    awayTeamId: awayTeam.id,
-                    homeScore: homeScore,
-                    awayScore: awayScore,
-                    isImportant: Math.random() > 0.7,
-                    mvpId: mvpPlayer?.id,
-                });
-                matchCounter++;
-            }
-        });
-
-
-        setAllMatches(prevMatches => [...prevMatches, ...newMatches]);
-        setDisplayedWeek(newWeek);
+        simulateMatchday();
         toast({
             title: `Jornada ${newWeek} Simulada`,
             description: "Se han generado nuevos resultados de partidos para todas las divisiones."
@@ -300,7 +254,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
         <CardContent className="p-0">
             <ScrollArea className="h-[400px]">
                 {matchesForDisplayedWeek.length > 0 ? matchesForDisplayedWeek.map((match) => (
-                    <MatchCard key={match.id} match={match} />
+                    <MatchCard key={match.id} match={match} getTeamById={getTeamById} getPlayerById={getPlayerById} />
                 )) : (
                   <div className="flex items-center justify-center h-40 text-muted-foreground">
                     No hay partidos para esta jornada y división.
@@ -315,7 +269,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
         <div ref={resultsExportRef} className="bg-card p-4">
             <div className="flex flex-col">
               {matchesForDisplayedWeek.length > 0 ? matchesForDisplayedWeek.map((match) => (
-                  <MatchCard key={`export-${match.id}`} match={match} />
+                  <MatchCard key={`export-${match.id}`} match={match} getTeamById={getTeamById} getPlayerById={getPlayerById} />
               )) : (
                 <div className="flex items-center justify-center h-40 text-muted-foreground p-8">
                   No hay partidos para esta jornada y división.

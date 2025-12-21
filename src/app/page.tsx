@@ -1,14 +1,23 @@
+"use client";
+
+import { useContext } from 'react';
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAllPlayers, getAllTeams, matchResults as initialMatches } from "@/lib/data";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { Icons } from "@/components/icons";
+import { LeagueContext } from '@/context/league-context';
 
 export default function DashboardPage() {
-  const totalTeams = getAllTeams().length;
-  const totalPlayers = getAllPlayers().length;
-  const totalGoals = getAllPlayers().reduce((sum, player) => sum + player.stats.goals, 0);
-  const currentWeek = initialMatches.reduce((max, m) => Math.max(max, m.week), 0);
+  const { teams, players, matches } = useContext(LeagueContext);
+
+  if (!teams.length || !players.length) {
+    return <div>Cargando...</div>;
+  }
+  
+  const totalTeams = teams.length;
+  const totalPlayers = players.length;
+  const totalGoals = players.reduce((sum, player) => sum + player.stats.goals, 0);
+  const currentWeek = matches.reduce((max, m) => Math.max(max, m.week), 0);
 
   const stats = [
     { title: "Equipos Totales", value: totalTeams, icon: <Icons.Teams className="h-6 w-6 text-muted-foreground" /> },
@@ -36,7 +45,7 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
-      <DashboardClient recentMatches={initialMatches} />
+      <DashboardClient />
     </>
   );
 }

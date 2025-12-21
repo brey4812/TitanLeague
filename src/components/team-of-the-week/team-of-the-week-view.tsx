@@ -1,31 +1,31 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
 import html2canvas from "html2canvas";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/icons";
-import { getTeamOfTheWeek, matchResults as allMatches } from "@/lib/data";
 import { TeamOfTheWeekPlayer } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { FootballField } from "./football-field";
 import { useToast } from "@/hooks/use-toast";
+import { LeagueContext } from "@/context/league-context";
 
 interface TeamOfTheWeekViewProps {
     initialWeek: number;
 }
 
 export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
+    const { getTeamOfTheWeek, matches } = useContext(LeagueContext);
     const [week, setWeek] = useState(initialWeek);
     const [team, setTeam] = useState<TeamOfTheWeekPlayer[]>([]);
     const fieldRef = useRef<HTMLDivElement>(null);
     const { toast } = useToast();
 
-    // This should ideally come from a shared state or props
-    const maxSimulatedWeek = allMatches.reduce((max, m) => Math.max(max, m.week), 0);
+    const maxSimulatedWeek = matches.reduce((max, m) => Math.max(max, m.week), 0);
 
     useEffect(() => {
         setTeam(getTeamOfTheWeek(week));
-    }, [week]);
+    }, [week, getTeamOfTheWeek]);
     
     useEffect(() => {
         setWeek(initialWeek);

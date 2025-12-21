@@ -1,17 +1,17 @@
+"use client";
 import Image from "next/image";
+import { useContext } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
-import { getAllPlayers, getTeamByPlayerId } from "@/lib/data";
 import { Player } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-
-const topScorers = [...getAllPlayers()].sort((a, b) => b.stats.goals - a.stats.goals).slice(0, 20);
-const topAssists = [...getAllPlayers()].sort((a, b) => b.stats.assists - a.stats.assists).slice(0, 20);
-const topCleanSheets = [...getAllPlayers()].filter(p => p.position === 'Goalkeeper').sort((a, b) => b.stats.cleanSheets - a.stats.cleanSheets).slice(0, 10);
+import { LeagueContext } from "@/context/league-context";
 
 const PlayerStatsTable = ({ players, statKey, statLabel }: { players: Player[], statKey: 'goals' | 'assists' | 'cleanSheets', statLabel: string }) => {
+    const { getTeamByPlayerId } = useContext(LeagueContext);
+    
     return (
         <Card>
             <Table>
@@ -52,6 +52,16 @@ const PlayerStatsTable = ({ players, statKey, statLabel }: { players: Player[], 
 }
 
 export default function StatsPage() {
+  const { players } = useContext(LeagueContext);
+  
+  if (!players.length) {
+    return <div>Cargando...</div>
+  }
+
+  const topScorers = [...players].sort((a, b) => b.stats.goals - a.stats.goals).slice(0, 20);
+  const topAssists = [...players].sort((a, b) => b.stats.assists - a.stats.assists).slice(0, 20);
+  const topCleanSheets = [...players].filter(p => p.position === 'Goalkeeper').sort((a, b) => b.stats.cleanSheets - a.stats.cleanSheets).slice(0, 10);
+
   return (
     <>
       <PageHeader

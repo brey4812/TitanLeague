@@ -1,17 +1,17 @@
 "use client";
-import React from 'react';
+import React, { useContext } from 'react';
 import Image from "next/image";
 import { PageHeader } from "@/components/shared/page-header";
-import { getAllTeams, divisions } from "@/lib/data";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TeamFormDialog } from '@/components/teams/team-form-dialog';
 import { Team } from '@/lib/types';
+import { LeagueContext } from '@/context/league-context';
 
 
 export default function TeamsPage() {
-  const [teams, setTeams] = React.useState(getAllTeams());
+  const { teams, divisions, updateTeam, addTeam } = useContext(LeagueContext);
   const [selectedTeam, setSelectedTeam] = React.useState<Team | null>(null);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
 
@@ -27,12 +27,9 @@ export default function TeamsPage() {
 
   const handleFormSave = (teamData: Team) => {
     if (selectedTeam) {
-      // It's an existing team, so we update it
-      setTeams(currentTeams => currentTeams.map(t => t.id === teamData.id ? teamData : t));
+      updateTeam(teamData);
     } else {
-      // It's a new team, we add it
-      const newTeamWithId = { ...teamData, id: Math.max(0, ...teams.map(t => t.id)) + 1 };
-      setTeams(currentTeams => [...currentTeams, newTeamWithId]);
+      addTeam(teamData);
     }
     setIsFormOpen(false);
     setSelectedTeam(null);

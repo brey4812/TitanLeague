@@ -1,9 +1,17 @@
+"use client";
+import { useContext } from 'react';
 import { PageHeader } from "@/components/shared/page-header";
 import { TeamOfTheWeekView } from "@/components/team-of-the-week/team-of-the-week-view";
-import { matchResults } from "@/lib/data";
+import { LeagueContext } from "@/context/league-context";
 
 export default function TeamOfTheWeekPage() {
-  const latestWeek = matchResults.reduce((max, m) => Math.max(max, m.week), 0);
+  const { matches } = useContext(LeagueContext);
+  
+  if (!matches.length) {
+    return <div>Cargando...</div>
+  }
+
+  const latestWeek = matches.reduce((max, m) => Math.max(max, m.week), 0);
 
   return (
     <>

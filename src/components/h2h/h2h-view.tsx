@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useContext } from "react";
 import Image from "next/image";
 import type { Team } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { LeagueContext } from "@/context/league-context";
 
 interface H2hViewProps {
   teams: Team[];
 }
 
 export function H2hView({ teams }: H2hViewProps) {
+  const { getTeamById } = useContext(LeagueContext);
   const [team1Id, setTeam1Id] = useState<string | null>(null);
   const [team2Id, setTeam2Id] = useState<string | null>(null);
   const [result, setResult] = useState<{ wins: number, draws: number, losses: number } | null>(null);
@@ -27,8 +29,8 @@ export function H2hView({ teams }: H2hViewProps) {
     }
   };
 
-  const team1 = team1Id ? teams.find(t => t.id === parseInt(team1Id)) : null;
-  const team2 = team2Id ? teams.find(t => t.id === parseInt(team2Id)) : null;
+  const team1 = team1Id ? getTeamById(parseInt(team1Id)) : null;
+  const team2 = team2Id ? getTeamById(parseInt(team2Id)) : null;
 
   return (
     <Card>

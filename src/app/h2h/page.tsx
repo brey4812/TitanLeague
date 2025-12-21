@@ -1,9 +1,16 @@
+"use client";
+import { useContext } from 'react';
 import { PageHeader } from "@/components/shared/page-header";
-import { getAllTeams } from "@/lib/data";
 import { H2hView } from "@/components/h2h/h2h-view";
+import { LeagueContext } from '@/context/league-context';
 
 export default function H2hPage() {
-    const teams = getAllTeams();
+    const { teams } = useContext(LeagueContext);
+    
+    if (!teams.length) {
+      return <div>Cargando...</div>;
+    }
+
   return (
     <>
       <PageHeader
