@@ -17,7 +17,7 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
     style={{ backgroundImage: `url(${player.teamLogoUrl})` }}
   >
     <p
-      className="w-full truncate text-center text-[10px] font-bold text-white"
+      className="w-full truncate text-center text-[10px] font-bold text-white pb-1"
       style={{ textShadow: '0px 1px 4px rgba(0, 0, 0, 0.9)' }}
     >
       {player.name}
@@ -44,9 +44,9 @@ const formationPositions = {
         [50, 75], // RCM
     ],
     forwards: [
-        [15, 15], // LW
-        [12, 50], // ST
-        [15, 85], // RW
+        [20, 15], // LW
+        [18, 50], // ST
+        [20, 85], // RW
     ]
 };
 
