@@ -77,7 +77,7 @@ export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
                 </Button>
             </div>
             <div className="p-4 sm:p-8 bg-green-700">
-                <div ref={fieldRef}>
+                <div ref={fieldRef} className="p-2 sm:p-4 bg-transparent">
                     <FootballField formation={formation} />
                 </div>
             </div>

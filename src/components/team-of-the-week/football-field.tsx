@@ -28,20 +28,27 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
   </div>
 );
 
-// Positions for a 4-3-3 formation
-// [top, left] percentages for a more realistic spread
+// Positions for a vertical 4-3-3 formation
+// [top, left] percentages
 const formationPositions = {
     goalkeeper: [
-        [88, 50],
+        [90, 50], // GK
     ],
     defenders: [
-        [70, 20], [68, 40], [68, 60], [70, 80],
+        [75, 18], // LB
+        [78, 40], // LCB
+        [78, 60], // RCB
+        [75, 82], // RB
     ],
     midfielders: [
-        [48, 25], [45, 50], [48, 75],
+        [55, 25], // LCM
+        [50, 50], // CM
+        [55, 75], // RCM
     ],
     forwards: [
-        [22, 18], [18, 50], [22, 82],
+        [30, 18], // LW
+        [25, 50], // ST
+        [30, 82], // RW
     ]
 };
 
@@ -63,24 +70,24 @@ export function FootballField({ formation }: FootballFieldProps) {
   };
 
   return (
-    <div className="relative w-[95vw] md:w-full max-w-4xl mx-auto aspect-[2/3] md:aspect-[3/2] rounded-lg border-4 border-white/30 overflow-hidden shadow-2xl bg-gradient-to-br from-green-500 via-green-600 to-emerald-700">
-        {/* Field lines using SVG for crispness */}
-        <svg width="100%" height="100%" viewBox="0 0 300 200" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
-            <rect width="300" height="200" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+    <div className="relative w-full max-w-lg mx-auto aspect-[2/3] rounded-lg border-4 border-white/30 overflow-hidden shadow-2xl bg-gradient-to-br from-green-500 via-green-600 to-emerald-700">
+        {/* Field lines using SVG for crispness and vertical orientation */}
+        <svg width="100%" height="100%" viewBox="0 0 200 300" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+            <rect width="200" height="300" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
             {/* Center line */}
-            <line x1="150" y1="0" x2="150" y2="200" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+            <line x1="0" y1="150" x2="200" y2="150" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
             {/* Center circle */}
-            <circle cx="150" cy="100" r="25" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+            <circle cx="100" cy="150" r="25" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
             {/* Center spot */}
-            <circle cx="150" cy="100" r="1" fill="rgba(255,255,255,0.2)" />
+            <circle cx="100" cy="150" r="1" fill="rgba(255,255,255,0.2)" />
             {/* Home penalty area */}
-            <rect x="0" y="55" width="45" height="90" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+            <rect x="30" y="255" width="140" height="45" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
             {/* Home goal area */}
-            <rect x="0" y="75" width="15" height="50" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+            <rect x="60" y="285" width="80" height="15" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
             {/* Away penalty area */}
-            <rect x="255" y="55" width="45" height="90" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+            <rect x="30" y="0" width="140" height="45" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
              {/* Away goal area */}
-            <rect x="285" y="75" width="15" height="50" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+            <rect x="60" y="0" width="80" height="15" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
         </svg>
       
         {/* Players */}
