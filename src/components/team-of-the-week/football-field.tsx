@@ -30,9 +30,9 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
 
 export function FootballField({ formation }: FootballFieldProps) {
   return (
-    <div className="relative w-full max-w-4xl mx-auto aspect-[16/9] bg-green-800 rounded-lg border-4 border-green-500/50 overflow-hidden">
+    <div className="relative w-full max-w-4xl mx-auto aspect-[16/10] bg-green-800 rounded-lg border-4 border-green-500/50 overflow-hidden">
       {/* Field Markings */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1/4 h-[45%] rounded-full border-2 border-green-500/50"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1/4 h-[40%] rounded-full border-2 border-green-500/50"></div>
       <div className="absolute top-1/2 left-0 -translate-y-1/2 w-full h-px bg-green-500/50"></div>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-green-500/50"></div>
       
@@ -42,25 +42,25 @@ export function FootballField({ formation }: FootballFieldProps) {
       <div className="absolute top-1/2 right-0 -translate-y-1/2 h-3/5 w-1/6 border-y-2 border-l-2 border-green-500/50 rounded-l-lg"></div>
       <div className="absolute top-1/2 right-0 -translate-y-1/2 h-1/3 w-10 border-y-2 border-l-2 border-green-500/50 rounded-l-md"></div>
       
-      {/* Formation */}
-      <div className="absolute inset-0 flex flex-col justify-around py-4">
-        {/* Forwards (3) */}
-        <div className="flex justify-around items-center">
+      {/* Formation: Using absolute positioning for each line */}
+      <div className="absolute inset-0">
+        {/* Forwards */}
+        <div className="absolute top-[10%] w-full flex justify-around items-center">
             {formation.forwards.map((p) => <PlayerCard key={p.id} player={p}/>)}
         </div>
 
-        {/* Midfielders (3) */}
-        <div className="flex justify-around items-center">
+        {/* Midfielders */}
+        <div className="absolute top-[35%] w-full flex justify-around items-center">
              {formation.midfielders.map((p) => <PlayerCard key={p.id} player={p}/>)}
         </div>
 
-        {/* Defenders (4) */}
-        <div className="flex justify-around items-center">
+        {/* Defenders */}
+        <div className="absolute top-[60%] w-full flex justify-around items-center">
              {formation.defenders.map((p) => <PlayerCard key={p.id} player={p}/>)}
         </div>
 
-        {/* Goalkeeper (1) */}
-        <div className="flex justify-center items-center">
+        {/* Goalkeeper */}
+        <div className="absolute bottom-[5%] w-full flex justify-center items-center">
              {formation.goalkeeper.map((p) => <PlayerCard key={p.id} player={p}/>)}
         </div>
       </div>
