@@ -12,23 +12,30 @@ interface FootballFieldProps {
 }
 
 const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
-  <div className="relative flex flex-col items-center text-center w-20 md:w-28 group transition-transform duration-300 hover:scale-110">
-    <div className="relative w-12 h-12 md:w-16 md:h-16 mb-1 drop-shadow-2xl">
-      <Image
-        src={player.teamLogoUrl}
-        alt={player.teamName}
-        width={64}
-        height={64}
-        className="rounded-full border-2 border-white bg-gray-200 object-cover"
-        data-ai-hint={player.teamDataAiHint}
-      />
+    <div className="relative flex flex-col items-center text-center w-20 md:w-28 group transition-transform duration-300 hover:scale-110">
+      <div className="relative w-12 h-12 md:w-16 md:h-16 drop-shadow-2xl">
+        <Image
+          src={player.teamLogoUrl}
+          alt={player.teamName}
+          width={64}
+          height={64}
+          className="rounded-full border-2 border-white bg-gray-200 object-cover"
+          data-ai-hint={player.teamDataAiHint}
+        />
+      </div>
+      <div 
+        className="absolute bottom-[-28px] w-full text-center"
+        style={{ transform: 'translateY(-50%)' }}
+      >
+        <span className="block text-xs font-bold text-white truncate w-full bg-black/50 rounded-full px-2 py-0.5 shadow-lg">
+          {player.name}
+        </span>
+        <Badge variant="secondary" className="mt-1 text-xs">
+          {player.position}
+        </Badge>
+      </div>
     </div>
-    <div className="text-xs font-bold text-white truncate w-full bg-black/50 rounded-full px-2 py-0.5 shadow-lg text-center">
-        <span>{player.name}</span>
-    </div>
-    <Badge variant="secondary" className="mt-1 text-xs inline-block text-center">{player.position}</Badge>
-  </div>
-);
+  );
 
 // Positions for a vertical 4-3-3 formation
 // [top, left] percentages for a vertical field
