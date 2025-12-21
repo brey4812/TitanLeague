@@ -23,8 +23,8 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
         data-ai-hint={player.teamDataAiHint}
       />
     </div>
-    {/* This simplified structure is more robust for html2canvas rendering */}
-    <div className="mt-1 w-full text-center">
+    {/* This structure is more robust for html2canvas rendering */}
+    <div className="absolute bottom-[-10px] w-full text-center">
         <p 
           className="text-white text-xs font-bold truncate"
           style={{ textShadow: '0px 1px 3px rgba(0, 0, 0, 0.7)' }}
