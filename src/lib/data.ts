@@ -23,7 +23,7 @@ const generatePlayers = (teamId: number, position: 'Goalkeeper' | 'Defender' | '
 
 const teams: Team[] = [
   {
-    id: 1, name: 'Crimson Hawks', logoUrl: 'https://picsum.photos/seed/1/100/100', dataAiHint: 'hawk bird', division: 1,
+    id: 1, name: 'Crimson Hawks', logoUrl: 'https://picsum.photos/seed/1/100/100', dataAiHint: 'hawk bird', division: 1, divisionName: 'Titan Prime Division',
     stats: { wins: 18, draws: 8, losses: 4, goalsFor: 55, goalsAgainst: 25 },
     roster: [
       ...generatePlayers(1, 'Goalkeeper', 2, 'GK'),
@@ -33,7 +33,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 2, name: 'Azure Dragons', logoUrl: 'https://picsum.photos/seed/2/100/100', dataAiHint: 'dragon simple', division: 1,
+    id: 2, name: 'Azure Dragons', logoUrl: 'https://picsum.photos/seed/2/100/100', dataAiHint: 'dragon simple', division: 1, divisionName: 'Titan Prime Division',
     stats: { wins: 20, draws: 5, losses: 5, goalsFor: 65, goalsAgainst: 30 },
     roster: [
       ...generatePlayers(2, 'Goalkeeper', 2, 'GK'),
@@ -43,7 +43,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 3, name: 'Golden Lions', logoUrl: 'https://picsum.photos/seed/3/100/100', dataAiHint: 'lion head', division: 1,
+    id: 3, name: 'Golden Lions', logoUrl: 'https://picsum.photos/seed/3/100/100', dataAiHint: 'lion head', division: 1, divisionName: 'Titan Prime Division',
     stats: { wins: 15, draws: 10, losses: 5, goalsFor: 45, goalsAgainst: 35 },
     roster: [
         ...generatePlayers(3, 'Goalkeeper', 2, 'Keeper'),
@@ -53,7 +53,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 4, name: 'Shadow Wolves', logoUrl: 'https://picsum.photos/seed/4/100/100', dataAiHint: 'wolf silhouette', division: 1,
+    id: 4, name: 'Shadow Wolves', logoUrl: 'https://picsum.photos/seed/4/100/100', dataAiHint: 'wolf silhouette', division: 1, divisionName: 'Titan Prime Division',
     stats: { wins: 12, draws: 10, losses: 8, goalsFor: 40, goalsAgainst: 38 },
     roster: [
         ...generatePlayers(4, 'Goalkeeper', 2, 'GK'),
@@ -63,7 +63,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 5, name: 'Steel Knights', logoUrl: 'https://picsum.photos/seed/5/100/100', dataAiHint: 'knight helmet', division: 2,
+    id: 5, name: 'Steel Knights', logoUrl: 'https://picsum.photos/seed/5/100/100', dataAiHint: 'knight helmet', division: 2, divisionName: 'Second Division',
     stats: { wins: 22, draws: 4, losses: 4, goalsFor: 70, goalsAgainst: 28 },
     roster: [
         ...generatePlayers(5, 'Goalkeeper', 2, 'GK'),
@@ -73,7 +73,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 6, name: 'Phoenix Rising', logoUrl: 'https://picsum.photos/seed/6/100/100', dataAiHint: 'phoenix fire', division: 2,
+    id: 6, name: 'Phoenix Rising', logoUrl: 'https://picsum.photos/seed/6/100/100', dataAiHint: 'phoenix fire', division: 2, divisionName: 'Second Division',
     stats: { wins: 19, draws: 6, losses: 5, goalsFor: 60, goalsAgainst: 32 },
     roster: [
         ...generatePlayers(6, 'Goalkeeper', 2, 'GK'),
@@ -83,7 +83,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 7, name: 'Arctic Bears', logoUrl: 'https://picsum.photos/seed/7/100/100', dataAiHint: 'polar bear', division: 2,
+    id: 7, name: 'Arctic Bears', logoUrl: 'https://picsum.photos/seed/7/100/100', dataAiHint: 'polar bear', division: 2, divisionName: 'Second Division',
     stats: { wins: 14, draws: 9, losses: 7, goalsFor: 50, goalsAgainst: 40 },
     roster: [
         ...generatePlayers(7, 'Goalkeeper', 2, 'GK'),
@@ -93,7 +93,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 8, name: 'Thunder Strikers', logoUrl: 'https://picsum.photos/seed/8/100/100', dataAiHint: 'lightning bolt', division: 2,
+    id: 8, name: 'Thunder Strikers', logoUrl: 'https://picsum.photos/seed/8/100/100', dataAiHint: 'lightning bolt', division: 2, divisionName: 'Second Division',
     stats: { wins: 10, draws: 12, losses: 8, goalsFor: 42, goalsAgainst: 45 },
     roster: [
         ...generatePlayers(8, 'Goalkeeper', 2, 'GK'),
@@ -103,7 +103,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 9, name: 'Forest Rangers', logoUrl: 'https://picsum.photos/seed/9/100/100', dataAiHint: 'pine tree', division: 3,
+    id: 9, name: 'Forest Rangers', logoUrl: 'https://picsum.photos/seed/9/100/100', dataAiHint: 'pine tree', division: 3, divisionName: 'Third Division',
     stats: { wins: 25, draws: 2, losses: 3, goalsFor: 80, goalsAgainst: 20 },
     roster: [
         ...generatePlayers(9, 'Goalkeeper', 2, 'GK'),
@@ -113,7 +113,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 10, name: 'Ocean Giants', logoUrl: 'https://picsum.photos/seed/10/100/100', dataAiHint: 'ocean wave', division: 3,
+    id: 10, name: 'Ocean Giants', logoUrl: 'https://picsum.photos/seed/10/100/100', dataAiHint: 'ocean wave', division: 3, divisionName: 'Third Division',
     stats: { wins: 1, draws: 1, losses: 28, goalsFor: 15, goalsAgainst: 90 },
     roster: [
         ...generatePlayers(10, 'Goalkeeper', 2, 'GK'),
@@ -123,7 +123,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 11, name: 'Desert Scorpions', logoUrl: 'https://picsum.photos/seed/11/100/100', dataAiHint: 'scorpion icon', division: 4,
+    id: 11, name: 'Desert Scorpions', logoUrl: 'https://picsum.photos/seed/11/100/100', dataAiHint: 'scorpion icon', division: 4, divisionName: 'Fourth Division',
     stats: { wins: 10, draws: 10, losses: 10, goalsFor: 35, goalsAgainst: 35 },
     roster: [
         ...generatePlayers(11, 'Goalkeeper', 2, 'GK'),
@@ -133,7 +133,7 @@ const teams: Team[] = [
     ]
   },
   {
-    id: 12, name: 'Volcano Vipers', logoUrl: 'https://picsum.photos/seed/12/100/100', dataAiHint: 'snake fangs', division: 4,
+    id: 12, name: 'Volcano Vipers', logoUrl: 'https://picsum.photos/seed/12/100/100', dataAiHint: 'snake fangs', division: 4, divisionName: 'Fourth Division',
     stats: { wins: 14, draws: 8, losses: 8, goalsFor: 48, goalsAgainst: 40 },
     roster: [
         ...generatePlayers(12, 'Goalkeeper', 2, 'GK'),

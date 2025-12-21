@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
-import type { MatchResult, Team } from "@/lib/types";
-import { getTeamById } from "@/lib/data";
+import type { MatchResult } from "@/lib/types";
+import { getTeamById, divisions } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Icons } from "@/components/icons";
 import { generatePressNotes } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import html2canvas from 'html2canvas';
 
 interface DashboardClientProps {
   recentMatches: MatchResult[];
@@ -21,6 +22,18 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
   const [pressNotes, setPressNotes] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const pressNoteRef = useRef<HTMLDivElement>(null);
+
+
+  const handleDownloadPressNotes = async () => {
+    if (!pressNoteRef.current) return;
+    
+    const canvas = await html2canvas(pressNoteRef.current);
+    const link = document.createElement('a');
+    link.download = `press-notes-${selectedMatch?.id}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
 
   const handleShowPressNotes = async (match: MatchResult) => {
     setSelectedMatch(match);
@@ -72,22 +85,24 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
 
     return (
       <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-4 flex-1">
+        <div className="flex items-center gap-2 sm:gap-4 flex-1">
           <Image src={homeTeam.logoUrl} alt={homeTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={homeTeam.dataAiHint} />
-          <span className="font-medium text-right w-24 sm:w-32 truncate">{homeTeam.name}</span>
+          <span className="font-medium text-right w-20 sm:w-32 truncate">{homeTeam.name}</span>
         </div>
-        <div className="text-center font-bold text-lg mx-4">
+        <div className="text-center font-bold text-lg mx-2 sm:mx-4">
           <span>{match.homeScore} - {match.awayScore}</span>
         </div>
-        <div className="flex items-center gap-4 flex-1">
-          <span className="font-medium text-left w-24 sm:w-32 truncate">{awayTeam.name}</span>
+        <div className="flex items-center gap-2 sm:gap-4 flex-1">
           <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
+          <span className="font-medium text-left w-20 sm:w-32 truncate">{awayTeam.name}</span>
         </div>
-        {match.isImportant && (
-          <Button variant="ghost" size="icon" className="ml-4" onClick={() => handleShowPressNotes(match)}>
-            <Icons.Press className="h-5 w-5" />
-          </Button>
-        )}
+        <div className="flex flex-col sm:flex-row gap-1">
+            {match.isImportant && (
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleShowPressNotes(match)}>
+                <Icons.Press className="h-5 w-5" />
+              </Button>
+            )}
+        </div>
       </div>
     );
   };
@@ -115,8 +130,9 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
   return (
     <>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Recent Results</CardTitle>
+          <Button><Icons.Play /> Simulate Matchday</Button>
         </CardHeader>
         <CardContent className="p-0">
           {recentMatches.map((match) => (
@@ -126,25 +142,35 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
       </Card>
 
       <Dialog open={!!selectedMatch} onOpenChange={(isOpen) => !isOpen && setSelectedMatch(null)}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            {homeTeam && awayTeam && (
-                <DialogTitle className="text-center text-2xl font-headline">
-                    <div className="flex justify-around items-center">
-                        <div className="flex flex-col items-center gap-2">
-                            <Image src={homeTeam.logoUrl} alt={homeTeam.name} width={60} height={60} className="rounded-full" data-ai-hint={homeTeam.dataAiHint}/>
-                            <span>{homeTeam.name}</span>
+        <DialogContent className="sm:max-w-[600px] p-0">
+          <div ref={pressNoteRef} className="p-6">
+            <DialogHeader>
+                {homeTeam && awayTeam && (
+                    <DialogTitle className="text-center text-2xl font-headline">
+                        <div className="flex justify-around items-center">
+                            <div className="flex flex-col items-center gap-2 text-center">
+                                <Image src={homeTeam.logoUrl} alt={homeTeam.name} width={60} height={60} className="rounded-full" data-ai-hint={homeTeam.dataAiHint}/>
+                                <span className="text-base">{homeTeam.name}</span>
+                            </div>
+                            <span className="text-4xl font-black text-primary mx-2">VS</span>
+                            <div className="flex flex-col items-center gap-2 text-center">
+                                <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={60} height={60} className="rounded-full" data-ai-hint={awayTeam.dataAiHint}/>
+                                <span className="text-base">{awayTeam.name}</span>
+                            </div>
                         </div>
-                        <span className="text-4xl font-black text-primary">VS</span>
-                         <div className="flex flex-col items-center gap-2">
-                            <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={60} height={60} className="rounded-full" data-ai-hint={awayTeam.dataAiHint}/>
-                            <span>{awayTeam.name}</span>
-                        </div>
-                    </div>
-                </DialogTitle>
-            )}
-          </DialogHeader>
-          <PressNoteContent />
+                    </DialogTitle>
+                )}
+            </DialogHeader>
+            <PressNoteContent />
+          </div>
+          {!isLoading && pressNotes && (
+            <DialogFooter className="p-6 bg-muted/50">
+              <Button onClick={handleDownloadPressNotes}>
+                <Icons.Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </>

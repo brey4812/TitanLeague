@@ -18,6 +18,7 @@ export interface Team {
   logoUrl: string;
   dataAiHint: string;
   division: number;
+  divisionName: string;
   stats: {
     wins: number;
     draws: number;
