@@ -34,6 +34,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const pressNoteRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const maxWeek = useMemo(() => allMatches.reduce((max, m) => Math.max(max, m.week), 0), [allMatches]);
   const [displayedWeek, setDisplayedWeek] = useState(maxWeek);
@@ -58,6 +59,33 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
     link.download = `press-notes-${selectedMatch?.id}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
+  };
+  
+  const handleDownloadResults = async () => {
+    if (!resultsRef.current) return;
+    
+    toast({
+        title: 'Generando Imagen...',
+        description: 'Por favor espera mientras creamos la imagen.'
+    });
+
+    try {
+        const canvas = await html2canvas(resultsRef.current, {
+            useCORS: true,
+            backgroundColor: null, 
+        });
+        const link = document.createElement('a');
+        link.download = `jornada-${displayedWeek}-resultados.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    } catch (error) {
+        console.error(error);
+        toast({
+            title: 'Descarga Fallida',
+            description: 'Algo salió mal mientras se generaba la imagen.',
+            variant: 'destructive'
+        });
+    }
   };
 
   const handleShowPressNotes = async (match: MatchResult) => {
@@ -190,7 +218,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                     <span className="font-semibold truncate">{mvp.name}</span>
                 </Badge>
             ) : <div className="h-6"/>}
-            <span className="text-xs text-muted-foreground mt-1">MVP</span>
+            {mvp && <span className="text-xs text-muted-foreground mt-1">MVP</span>}
         </div>
         <div className="flex flex-col sm:flex-row gap-1">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleShowPressNotes(match)}>
@@ -223,10 +251,13 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <Card className="lg:col-span-3">
+       <Card className="lg:col-span-3" ref={resultsRef}>
         <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <CardTitle>Resultados</CardTitle>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <Button onClick={handleDownloadResults} variant="outline" className="h-10">
+                <Icons.Download className="mr-2"/> Descargar Resultados
+              </Button>
               <Select value={displayedDivision} onValueChange={setDisplayedDivision}>
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Seleccionar División" />
@@ -308,5 +339,3 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
     </div>
   );
 }
-
-    
