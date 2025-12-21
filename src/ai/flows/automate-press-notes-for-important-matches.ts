@@ -44,23 +44,23 @@ const pressNotesPrompt = ai.definePrompt({
   name: 'pressNotesPrompt',
   input: {schema: GeneratePressNotesInputSchema},
   output: {schema: GeneratePressNotesOutputSchema},
-  prompt: `You are a sports journalist creating a "VERSUS" style press note for a key match.
+  prompt: `Eres un periodista deportivo creando una nota de prensa estilo "VERSUS" para un partido clave.
 
-  Based on the following information, generate compelling and informative press notes highlighting key stats and storylines. The tone should be exciting and build anticipation for the match.
+  Basándote en la siguiente información, genera notas de prensa atractivas e informativas que destaquen las estadísticas y las historias clave. El tono debe ser emocionante y crear expectación para el partido. La nota de prensa debe estar en español.
 
-  Match Type: {{{matchType}}}
+  Tipo de Partido: {{{matchType}}}
 
-  Team 1: {{{team1Name}}}
+  Equipo 1: {{{team1Name}}}
   Logo: {{media url=team1Logo}}
-  Wins: {{{team1Wins}}}, Draws: {{{team1Draws}}}, Losses: {{{team1Losses}}}
-  Goals For: {{{team1GoalsFor}}}, Goals Against: {{{team1GoalsAgainst}}}
+  Victorias: {{{team1Wins}}}, Empates: {{{team1Draws}}}, Derrotas: {{{team1Losses}}}
+  Goles a Favor: {{{team1GoalsFor}}}, Goles en Contra: {{{team1GoalsAgainst}}}
 
-  Team 2: {{{team2Name}}}
+  Equipo 2: {{{team2Name}}}
   Logo: {{media url=team2Logo}}
-  Wins: {{{team2Wins}}}, Draws: {{{team2Draws}}}, Losses: {{{team2Losses}}}
-  Goals For: {{{team2GoalsFor}}}, Goals Against: {{{team2GoalsAgainst}}}
+  Victorias: {{{team2Wins}}}, Empates: {{{team2Draws}}}, Derrotas: {{{team2Losses}}}
+  Goles a Favor: {{{team2GoalsFor}}}, Goles en Contra: {{{team2GoalsAgainst}}}
 
-  Write the press notes: `,
+  Escribe las notas de prensa: `,
 });
 
 const generatePressNotesFlow = ai.defineFlow(

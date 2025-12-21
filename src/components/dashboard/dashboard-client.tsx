@@ -161,6 +161,11 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
                     </DialogTitle>
                 )}
             </DialogHeader>
+             {selectedMatch && (
+              <div className="text-center font-bold text-3xl my-4">
+                <span>{selectedMatch.homeScore} - {selectedMatch.awayScore}</span>
+              </div>
+            )}
             <PressNoteContent />
           </div>
           {!isLoading && pressNotes && (
