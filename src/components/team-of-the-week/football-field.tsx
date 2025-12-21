@@ -17,8 +17,7 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
     style={{ backgroundImage: `url(${player.teamLogoUrl})` }}
   >
     <p
-      className="w-full truncate text-center text-[10px] font-bold text-white pb-1"
-      style={{ textShadow: '0px 1px 4px rgba(0, 0, 0, 0.9)' }}
+      className="w-full truncate rounded-b-full bg-white text-center text-[10px] font-bold text-black pb-1"
     >
       {player.name}
     </p>
