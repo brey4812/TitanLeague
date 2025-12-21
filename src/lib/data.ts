@@ -172,12 +172,39 @@ export const getAllPlayers = (): Player[] => teams.flatMap(t => t.roster);
 
 export const getPlayerById = (id: number): Player | undefined => getAllPlayers().find(p => p.id === id);
 
+// seeded random number generator
+const mulberry32 = (a: number) => {
+    return () => {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+}
+
 export const getTeamOfTheWeek = (week: number): TeamOfTheWeekPlayer[] => {
-    // This is a mock function. In a real app, you'd have a more complex logic
-    // to determine the team of the week based on performance.
     const allPlayers = getAllPlayers();
-    const shuffled = allPlayers.sort(() => 0.5 - Math.random());
-    const totwPlayers = shuffled.slice(0, 11);
+    const rng = mulberry32(week); // Use week as seed for deterministic results
+
+    const shuffle = (array: Player[]) => {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    };
+    
+    const goalkeepers = shuffle(allPlayers.filter(p => p.position === 'Goalkeeper'));
+    const defenders = shuffle(allPlayers.filter(p => p.position === 'Defender'));
+    const midfielders = shuffle(allPlayers.filter(p => p.position === 'Midfielder'));
+    const forwards = shuffle(allPlayers.filter(p => p.position === 'Forward'));
+
+    const totwPlayers = [
+        ...goalkeepers.slice(0, 1),
+        ...defenders.slice(0, 4),
+        ...midfielders.slice(0, 3),
+        ...forwards.slice(0, 3)
+    ];
     
     return totwPlayers.map(player => {
         const team = getTeamByPlayerId(player.id);

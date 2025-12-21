@@ -35,15 +35,15 @@ const formationPositions = {
         [90, 50], // GK
     ],
     defenders: [
-        [75, 20], // LB
+        [75, 15], // LB
         [78, 40], // LCB
         [78, 60], // RCB
-        [75, 80], // RB
+        [75, 85], // RB
     ],
     midfielders: [
-        [55, 30], // LCM
+        [55, 25], // LCM
         [50, 50], // CM
-        [55, 70], // RCM
+        [55, 75], // RCM
     ],
     forwards: [
         [28, 20], // LW
