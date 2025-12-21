@@ -23,8 +23,10 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
         data-ai-hint={player.teamDataAiHint}
       />
     </div>
-    <p className="text-xs font-bold text-white truncate w-full bg-black/50 rounded-full px-2 py-0.5 shadow-lg">{player.name}</p>
-    <Badge variant="secondary" className="mt-1 text-xs">{player.position}</Badge>
+    <div className="text-xs font-bold text-white truncate w-full bg-black/50 rounded-full px-2 py-0.5 shadow-lg flex items-center justify-center">
+        <span>{player.name}</span>
+    </div>
+    <Badge variant="secondary" className="mt-1 text-xs inline-flex justify-center">{player.position}</Badge>
   </div>
 );
 
