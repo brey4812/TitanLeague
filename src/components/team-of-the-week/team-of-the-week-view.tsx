@@ -38,7 +38,7 @@ export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
         if (!fieldRef.current) return;
         const canvas = await html2canvas(fieldRef.current, {
             useCORS: true,
-            backgroundColor: '#166534', // a dark green color
+            backgroundColor: '#15803d', // a dark green color from tailwind green-700
         });
         const link = document.createElement('a');
         link.download = `11-de-la-jornada-${week}.png`;
@@ -76,8 +76,10 @@ export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
                     Descargar
                 </Button>
             </div>
-            <div ref={fieldRef} className="p-4 bg-green-700">
-                <FootballField formation={formation} />
+            <div className="p-4 sm:p-8 bg-green-700">
+                <div ref={fieldRef}>
+                    <FootballField formation={formation} />
+                </div>
             </div>
         </Card>
     );
