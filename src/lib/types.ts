@@ -44,6 +44,7 @@ export interface MatchResult {
   homeScore: number;
   awayScore: number;
   isImportant: boolean;
+  mvpId?: number;
 }
 
 export interface H2HRecord {
@@ -52,4 +53,10 @@ export interface H2HRecord {
   wins: number;
   draws: number;
   losses: number;
+}
+
+export interface TeamOfTheWeekPlayer extends Player {
+  teamName: string;
+  teamLogoUrl: string;
+  teamDataAiHint: string;
 }

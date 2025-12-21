@@ -12,7 +12,11 @@ import {
   Info,
   Download,
   Newspaper,
-  Play
+  Play,
+  Calendar,
+  Star,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 export const Icons = {
@@ -31,6 +35,10 @@ export const Icons = {
   Users: Users,
   Play: Play,
   Trophy: Trophy,
+  Calendar: Calendar,
+  Star: Star,
+  ChevronLeft: ChevronLeft,
+  ChevronRight: ChevronRight,
   Logo: (props: SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"

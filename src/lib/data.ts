@@ -1,4 +1,4 @@
-import type { Team, Division, MatchResult, Player } from '@/lib/types';
+import type { Team, Division, MatchResult, Player, TeamOfTheWeekPlayer } from '@/lib/types';
 
 const generatePlayers = (teamId: number, position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward', count: number, namePrefix: string): Player[] => {
   const players: Player[] = [];
@@ -152,10 +152,10 @@ export const divisions: Division[] = [
 ];
 
 export const matchResults: MatchResult[] = [
-  { id: 1, season: 1, week: 5, homeTeamId: 1, awayTeamId: 2, homeScore: 2, awayScore: 2, isImportant: true },
-  { id: 2, season: 1, week: 5, homeTeamId: 3, awayTeamId: 4, homeScore: 1, awayScore: 0, isImportant: false },
-  { id: 3, season: 1, week: 5, homeTeamId: 5, awayTeamId: 6, homeScore: 3, awayScore: 1, isImportant: false },
-  { id: 4, season: 1, week: 5, homeTeamId: 7, awayTeamId: 8, homeScore: 0, awayScore: 0, isImportant: false },
+  { id: 1, season: 1, week: 5, homeTeamId: 1, awayTeamId: 2, homeScore: 2, awayScore: 2, isImportant: true, mvpId: 104 },
+  { id: 2, season: 1, week: 5, homeTeamId: 3, awayTeamId: 4, homeScore: 1, awayScore: 0, isImportant: false, mvpId: 302 },
+  { id: 3, season: 1, week: 5, homeTeamId: 5, awayTeamId: 6, homeScore: 3, awayScore: 1, isImportant: false, mvpId: 504 },
+  { id: 4, season: 1, week: 5, homeTeamId: 7, awayTeamId: 8, homeScore: 0, awayScore: 0, isImportant: false, mvpId: 701 },
 ];
 
 export const getAllTeams = (): Team[] => teams;
@@ -167,3 +167,23 @@ export const getTeamByPlayerId = (playerId: number): Team | undefined => {
 };
 
 export const getAllPlayers = (): Player[] => teams.flatMap(t => t.roster);
+
+export const getPlayerById = (id: number): Player | undefined => getAllPlayers().find(p => p.id === id);
+
+export const getTeamOfTheWeek = (week: number): TeamOfTheWeekPlayer[] => {
+    // This is a mock function. In a real app, you'd have a more complex logic
+    // to determine the team of the week based on performance.
+    const allPlayers = getAllPlayers();
+    const shuffled = allPlayers.sort(() => 0.5 - Math.random());
+    const totwPlayers = shuffled.slice(0, 11);
+    
+    return totwPlayers.map(player => {
+        const team = getTeamByPlayerId(player.id);
+        return {
+            ...player,
+            teamName: team?.name || 'Unknown',
+            teamLogoUrl: team?.logoUrl || '',
+            teamDataAiHint: team?.dataAiHint || '',
+        }
+    })
+};

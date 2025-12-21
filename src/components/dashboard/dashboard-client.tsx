@@ -2,8 +2,8 @@
 
 import { useState, useRef, useTransition } from "react";
 import Image from "next/image";
-import type { MatchResult, Team } from "@/lib/types";
-import { getTeamById, getAllTeams } from "@/lib/data";
+import type { MatchResult, Team, TeamOfTheWeekPlayer, Player } from "@/lib/types";
+import { getTeamById, getAllTeams, getPlayerById, getTeamOfTheWeek } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import html2canvas from 'html2canvas';
 import { ScrollArea } from "../ui/scroll-area";
+import { Badge } from "../ui/badge";
+import { TeamOfTheWeek } from "./team-of-the-week";
 
 interface DashboardClientProps {
   recentMatches: MatchResult[];
@@ -39,6 +41,11 @@ const getTwoRandomTeams = (teams: Team[], existingPairs: [number, number][]): [T
     return [team1, team2];
 }
 
+const getRandomPlayer = (team: Team) => {
+    if (!team || !team.roster || team.roster.length === 0) return null;
+    return team.roster[Math.floor(Math.random() * team.roster.length)];
+}
+
 export function DashboardClient({ recentMatches: initialMatches }: DashboardClientProps) {
   const [isPending, startTransition] = useTransition();
   const [recentMatches, setRecentMatches] = useState(initialMatches);
@@ -48,6 +55,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
   const { toast } = useToast();
   const pressNoteRef = useRef<HTMLDivElement>(null);
 
+  const currentWeek = recentMatches.reduce((max, m) => Math.max(max, m.week), 0);
 
   const handleDownloadPressNotes = async () => {
     if (!pressNoteRef.current) return;
@@ -106,9 +114,10 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
         const allTeams = getAllTeams();
         const newMatches: MatchResult[] = [];
         const matchesPerSimulation = 4;
-        const existingPairs: [number, number][] = recentMatches.map(m => [m.homeTeamId, m.awayTeamId]);
+        const existingPairs: [number, number][] = [];
 
         const latestWeek = recentMatches.reduce((max, m) => Math.max(max, m.week), 0);
+        const newWeek = latestWeek + 1;
         const latestId = recentMatches.reduce((max, m) => Math.max(max, m.id), 0);
 
         for(let i = 0; i < matchesPerSimulation; i++) {
@@ -116,22 +125,28 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
             if(teamPair) {
                 const [homeTeam, awayTeam] = teamPair;
                 existingPairs.push([homeTeam.id, awayTeam.id]);
+                
+                const homePlayer = getRandomPlayer(homeTeam);
+                const awayPlayer = getRandomPlayer(awayTeam);
+                const mvpId = Math.random() > 0.5 ? homePlayer?.id : awayPlayer?.id;
+                
                 newMatches.push({
                     id: latestId + i + 1,
                     season: 1,
-                    week: latestWeek + 1,
+                    week: newWeek,
                     homeTeamId: homeTeam.id,
                     awayTeamId: awayTeam.id,
                     homeScore: Math.floor(Math.random() * 5),
                     awayScore: Math.floor(Math.random() * 5),
-                    isImportant: Math.random() > 0.7
+                    isImportant: Math.random() > 0.7,
+                    mvpId: mvpId,
                 });
             }
         }
 
-        setRecentMatches(prevMatches => [...newMatches, ...prevMatches].slice(0, 4));
+        setRecentMatches(prevMatches => [...newMatches, ...prevMatches]);
         toast({
-            title: "Jornada Simulada",
+            title: `Jornada ${newWeek} Simulada`,
             description: "Se han generado nuevos resultados de partidos."
         })
     });
@@ -140,6 +155,8 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
   const MatchCard = ({ match }: { match: MatchResult }) => {
     const homeTeam = getTeamById(match.homeTeamId);
     const awayTeam = getTeamById(match.awayTeamId);
+    const mvp = match.mvpId ? getPlayerById(match.mvpId) : null;
+
 
     if (!homeTeam || !awayTeam) return null;
 
@@ -155,6 +172,15 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
         <div className="flex items-center gap-2 sm:gap-4 flex-1">
           <span className="font-medium text-left w-20 sm:w-32 truncate">{awayTeam.name}</span>
           <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
+        </div>
+        <div className="flex flex-col items-center mx-4">
+            {mvp && (
+                <Badge variant="outline" className="flex items-center gap-1.5">
+                    <Icons.Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                    <span className="font-semibold">{mvp.name}</span>
+                </Badge>
+            )}
+            <span className="text-xs text-muted-foreground mt-1">MVP</span>
         </div>
         <div className="flex flex-col sm:flex-row gap-1">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleShowPressNotes(match)}>
@@ -186,24 +212,31 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
   const awayTeam = selectedMatch ? getTeamById(selectedMatch.awayTeamId) : null;
 
   return (
-    <>
-      <Card>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <Card className="lg:col-span-2">
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Resultados Recientes</CardTitle>
+          <div className="flex items-center gap-4">
+            <CardTitle>Resultados Recientes</CardTitle>
+            <Badge variant="secondary">Jornada {currentWeek}</Badge>
+          </div>
           <Button onClick={handleSimulateMatchday} disabled={isPending}>
             {isPending ? 'Simulando...' : <><Icons.Play className="mr-2"/> Simular Jornada</>}
           </Button>
         </CardHeader>
         <CardContent className="p-0">
-          {recentMatches.map((match) => (
-            <MatchCard key={match.id} match={match} />
-          ))}
+            <ScrollArea className="h-[400px]">
+                {recentMatches.map((match) => (
+                    <MatchCard key={match.id} match={match} />
+                ))}
+            </ScrollArea>
         </CardContent>
       </Card>
 
+      <TeamOfTheWeek initialWeek={currentWeek}/>
+
       <Dialog open={!!selectedMatch} onOpenChange={(isOpen) => !isOpen && setSelectedMatch(null)}>
         <DialogContent className="sm:max-w-[600px]">
-          <ScrollArea className="max-h-[80vh]">
+          <ScrollArea className="max-h-[80vh] p-1">
             <div ref={pressNoteRef} className="p-6">
               <DialogHeader>
                   {homeTeam && awayTeam && (
@@ -240,7 +273,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
           )}
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
 
