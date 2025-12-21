@@ -29,26 +29,26 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
 );
 
 // Positions for a vertical 4-3-3 formation
-// [top, left] percentages
+// [top, left] percentages for a vertical field
 const formationPositions = {
     goalkeeper: [
         [90, 50], // GK
     ],
     defenders: [
-        [75, 18], // LB
+        [75, 20], // LB
         [78, 40], // LCB
         [78, 60], // RCB
-        [75, 82], // RB
+        [75, 80], // RB
     ],
     midfielders: [
-        [55, 25], // LCM
+        [55, 30], // LCM
         [50, 50], // CM
-        [55, 75], // RCM
+        [55, 70], // RCM
     ],
     forwards: [
-        [30, 18], // LW
+        [28, 20], // LW
         [25, 50], // ST
-        [30, 82], // RW
+        [28, 80], // RW
     ]
 };
 
