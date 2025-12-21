@@ -1,0 +1,88 @@
+import Image from "next/image";
+import { PageHeader } from "@/components/shared/page-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card } from "@/components/ui/card";
+import { getAllPlayers, getTeamById } from "@/lib/data";
+import { Player } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
+
+const topScorers = [...getAllPlayers()].sort((a, b) => b.stats.goals - a.stats.goals).slice(0, 20);
+const topAssists = [...getAllPlayers()].sort((a, b) => b.stats.assists - a.stats.assists).slice(0, 20);
+const topCleanSheets = [...getAllPlayers()].filter(p => p.position === 'Goalkeeper').sort((a, b) => b.stats.cleanSheets - a.stats.cleanSheets).slice(0, 10);
+
+const PlayerStatsTable = ({ players, statKey, statLabel }: { players: Player[], statKey: 'goals' | 'assists' | 'cleanSheets', statLabel: string }) => {
+    const findTeam = (player: Player) => {
+        const teams = getAllPlayers();
+        // This is inefficient for a real app, but fine for mock data.
+        // In a real app, player would have a teamId.
+        const allTeams = getTeamById(1)!.roster.includes(player) ? getTeamById(1) : getTeamById(2); // Simplified
+        const team = getTeamById(Math.floor(player.id / 100));
+        return team;
+    }
+
+    return (
+        <Card>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-12 text-center">#</TableHead>
+                        <TableHead>Player</TableHead>
+                        <TableHead>Team</TableHead>
+                        <TableHead>Position</TableHead>
+                        <TableHead className="text-center">{statLabel}</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {players.map((player, index) => {
+                        const team = findTeam(player);
+                        return (
+                        <TableRow key={player.id}>
+                            <TableCell className="font-medium text-center">{index + 1}</TableCell>
+                            <TableCell className="font-medium">{player.name}</TableCell>
+                            <TableCell>
+                                {team && (
+                                    <div className="flex items-center gap-2">
+                                        <Image src={team.logoUrl} alt={team.name} width={20} height={20} className="rounded-full" data-ai-hint={team.dataAiHint} />
+                                        {team.name}
+                                    </div>
+                                )}
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant="outline">{player.position}</Badge>
+                            </TableCell>
+                            <TableCell className="text-center font-bold">{player.stats[statKey]}</TableCell>
+                        </TableRow>
+                    )})}
+                </TableBody>
+            </Table>
+        </Card>
+    )
+}
+
+export default function StatsPage() {
+  return (
+    <>
+      <PageHeader
+        title="Player Statistics"
+        description="Leaderboards for individual performance across the Titan League."
+      />
+       <Tabs defaultValue="scorers" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="scorers">Top Scorers</TabsTrigger>
+          <TabsTrigger value="assists">Top Assists</TabsTrigger>
+          <TabsTrigger value="clean-sheets">Clean Sheets</TabsTrigger>
+        </TabsList>
+        <TabsContent value="scorers" className="mt-6">
+          <PlayerStatsTable players={topScorers} statKey="goals" statLabel="Goals" />
+        </TabsContent>
+        <TabsContent value="assists" className="mt-6">
+          <PlayerStatsTable players={topAssists} statKey="assists" statLabel="Assists" />
+        </TabsContent>
+        <TabsContent value="clean-sheets" className="mt-6">
+            <PlayerStatsTable players={topCleanSheets} statKey="cleanSheets" statLabel="Clean Sheets" />
+        </TabsContent>
+      </Tabs>
+    </>
+  );
+}

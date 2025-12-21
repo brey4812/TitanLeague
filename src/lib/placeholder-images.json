@@ -1,3 +1,100 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "logo1",
+      "description": "Crimson Hawks team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1739660701950-dad28c538b82?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxoYXdrJTIwYmlyZHxlbnwwfHx8fDE3NjYzNDA2ODh8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "hawk bird"
+    },
+    {
+      "id": "logo2",
+      "description": "Azure Dragons team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1667477603004-00852d582d4a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxkcmFnb24lMjBzaW1wbGV8ZW58MHx8fHwxNzY2MzQwNjg4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "dragon simple"
+    },
+    {
+      "id": "logo3",
+      "description": "Golden Lions team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1575532777978-623355a90473?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8bGlvbiUyMGhlYWR8ZW58MHx8fHwxNzY2MjczNjA4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "lion head"
+    },
+    {
+      "id": "logo4",
+      "description": "Shadow Wolves team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1565024013832-8ff91d744811?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHx3b2xmJTIwc2lsaG91ZXR0ZXxlbnwwfHx8fDE3NjYzNDA2ODh8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "wolf silhouette"
+    },
+    {
+      "id": "logo5",
+      "description": "Steel Knights team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1600081522821-b6a482861e45?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxrbmlnaHQlMjBoZWxtZXR8ZW58MHx8fHwxNzY2MzQwNjg4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "knight helmet"
+    },
+    {
+      "id": "logo6",
+      "description": "Phoenix Rising team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1529094074205-0000b558b7c0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxwaG9lbml4JTIwZmlyZXxlbnwwfHx8fDE3NjYzNDA2ODh8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "phoenix fire"
+    },
+    {
+      "id": "logo7",
+      "description": "Arctic Bears team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1614720216135-c83575f58165?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxwb2xhciUyMGJlYXJ8ZW58MHx8fHwxNzY2MjQxODM3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "polar bear"
+    },
+    {
+      "id": "logo8",
+      "description": "Thunder Strikers team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1630348727758-240aea8f99fe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxsaWdodG5pbmclMjBib2x0fGVufDB8fHx8MTc2NjMzMzIzNXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "lightning bolt"
+    },
+    {
+      "id": "logo9",
+      "description": "Forest Rangers team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1509992030181-1c99eb07dec8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxwaW5lJTIwdHJlZXxlbnwwfHx8fDE3NjYzNDA2ODh8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "pine tree"
+    },
+    {
+      "id": "logo10",
+      "description": "Ocean Giants team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1518837695005-2083093ee35b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxvY2VhbiUyMHdhdmV8ZW58MHx8fHwxNzY2MjUxMDA0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "ocean wave"
+    },
+    {
+      "id": "logo11",
+      "description": "Desert Scorpions team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1708083897415-fb119332e5a6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxzY29ycGlvbiUyMGljb258ZW58MHx8fHwxNzY2MzQwNjg4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "scorpion icon"
+    },
+    {
+      "id": "logo12",
+      "description": "Volcano Vipers team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1758165137975-6c51682f0976?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxzbmFrZSUyMGZhbmdzfGVufDB8fHx8MTc2NjM0MDY4OHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "snake fangs"
+    },
+    {
+      "id": "logo13",
+      "description": "Mountain Yetis team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1491986981770-cb1eee867c54?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxtb3VudGFpbiUyMHBlYWt8ZW58MHx8fHwxNzY2MzEwMDQyfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "mountain peak"
+    },
+    {
+      "id": "logo14",
+      "description": "River Sharks team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1678049475384-cdedb69c0f13?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxzaGFyayUyMGZpbnxlbnwwfHx8fDE3NjYyNzM2MDd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "shark fin"
+    },
+    {
+      "id": "logo15",
+      "description": "City Sentinels team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1544214036-5aaeb9e32d11?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxjaXR5JTIwc2t5bGluZXxlbnwwfHx8fDE3NjYyNzU0MDN8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "city skyline"
+    },
+    {
+      "id": "logo16",
+      "description": "Cosmic Comets team logo",
+      "imageUrl": "https://images.unsplash.com/photo-1694070777520-91758ea670e6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxjb21ldCUyMHRyYWlsfGVufDB8fHx8MTc2NjM0MDY4OHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "comet trail"
+    }
+  ]
 }

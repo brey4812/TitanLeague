@@ -1,1 +1,5 @@
-// Flows will be imported for their side effects in this file.
+import { config } from 'dotenv';
+config();
+
+import '@/ai/flows/automate-press-notes-for-important-matches.ts';
+import '@/ai/flows/generate-initial-player-stats.ts';
