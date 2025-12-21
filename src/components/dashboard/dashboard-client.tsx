@@ -20,25 +20,6 @@ interface DashboardClientProps {
   recentMatches: MatchResult[];
 }
 
-// Helper function to get two random distinct teams from a specific division
-const getTwoRandomTeams = (teams: Team[], existingPairs: [number, number][]): [Team, Team] | null => {
-    let team1: Team, team2: Team;
-    let attempts = 0;
-    
-    const availableTeams = teams.filter(t => !existingPairs.flat().includes(t.id));
-    if (availableTeams.length < 2) return null;
-
-    do {
-        team1 = availableTeams[Math.floor(Math.random() * availableTeams.length)];
-        team2 = availableTeams[Math.floor(Math.random() * availableTeams.length)];
-        attempts++;
-    } while (team1.id === team2.id && attempts < 50);
-
-    if (team1.id === team2.id) return null;
-
-    return [team1, team2];
-}
-
 const getRandomPlayer = (team: Team): Player | null => {
     if (!team || !team.roster || team.roster.length === 0) return null;
     const roster = team.roster;
@@ -123,24 +104,23 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
 
   const handleSimulateMatchday = () => {
     startTransition(() => {
-        const allTeams = getAllTeams();
         const newMatches: MatchResult[] = [];
         const newWeek = maxWeek + 1;
         const latestId = allMatches.reduce((max, m) => Math.max(max, m.id), 0);
         let matchCounter = 0;
 
         divisions.forEach(division => {
-            const teamsInDivision = division.teams;
-            const teamsToPair = [...teamsInDivision];
-            const pairedTeamIds: number[] = [];
+            const teamsInDivision = [...division.teams];
+            const pairedTeamIds = new Set<number>();
 
-            while (pairedTeamIds.length < teamsToPair.length) {
-                const availableTeams = teamsToPair.filter(t => !pairedTeamIds.includes(t.id));
-                if (availableTeams.length < 2) break;
+            while (teamsInDivision.length >= 2) {
+                const team1Index = Math.floor(Math.random() * teamsInDivision.length);
+                const team1 = teamsInDivision.splice(team1Index, 1)[0];
+                
+                const team2Index = Math.floor(Math.random() * teamsInDivision.length);
+                const team2 = teamsInDivision.splice(team2Index, 1)[0];
 
-                const team1 = availableTeams[0];
-                const team2 = availableTeams[1];
-                pairedTeamIds.push(team1.id, team2.id);
+                if (!team1 || !team2) continue;
 
                 const homeTeam = Math.random() > 0.5 ? team1 : team2;
                 const awayTeam = homeTeam.id === team1.id ? team2 : team1;
@@ -148,7 +128,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                 const homeScore = Math.floor(Math.random() * 5);
                 const awayScore = Math.floor(Math.random() * 5);
                 
-                let mvpPlayer = null;
+                let mvpPlayer: Player | null = null;
                 if (homeScore > awayScore) {
                     mvpPlayer = getRandomPlayer(homeTeam);
                 } else if (awayScore > homeScore) {
@@ -260,11 +240,11 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                 </SelectContent>
               </Select>
               <div className="flex items-center gap-2 justify-between">
-                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => w - 1)} disabled={displayedWeek <= 1}>
+                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => Math.max(1, w - 1))}>
                       <Icons.ChevronLeft className="h-4 w-4" />
                   </Button>
                   <Badge variant="secondary" className="text-sm px-4 py-2 h-10">Jornada {displayedWeek}</Badge>
-                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => w + 1)} disabled={displayedWeek >= maxWeek}>
+                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => w + 1)} disabled={isPending}>
                       <Icons.ChevronRight className="h-4 w-4" />
                   </Button>
               </div>
