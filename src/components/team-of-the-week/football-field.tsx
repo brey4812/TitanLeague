@@ -28,7 +28,40 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
   </div>
 );
 
+// Positions for a 4-3-3 formation
+// [top, left] percentages
+const formationPositions = {
+    goalkeeper: [
+        [85, 50],
+    ],
+    defenders: [
+        [65, 20], [60, 40], [60, 60], [65, 80],
+    ],
+    midfielders: [
+        [40, 25], [35, 50], [40, 75],
+    ],
+    forwards: [
+        [15, 20], [10, 50], [15, 80],
+    ]
+};
+
+
 export function FootballField({ formation }: FootballFieldProps) {
+  
+  const renderPlayer = (player: TeamOfTheWeekPlayer, positions: number[][], index: number) => {
+    if (!player || !positions[index]) return null;
+    const [top, left] = positions[index];
+    return (
+        <div 
+            key={player.id} 
+            className="absolute" 
+            style={{ top: `${top}%`, left: `${left}%`, transform: 'translate(-50%, -50%)' }}
+        >
+            <PlayerCard player={player} />
+        </div>
+    );
+  };
+
   return (
     <div className="relative w-full max-w-4xl mx-auto aspect-[16/10] bg-green-800 rounded-lg border-4 border-green-500/50 overflow-hidden">
       {/* Field Markings */}
@@ -42,27 +75,12 @@ export function FootballField({ formation }: FootballFieldProps) {
       <div className="absolute top-1/2 right-0 -translate-y-1/2 h-3/5 w-1/6 border-y-2 border-l-2 border-green-500/50 rounded-l-lg"></div>
       <div className="absolute top-1/2 right-0 -translate-y-1/2 h-1/3 w-10 border-y-2 border-l-2 border-green-500/50 rounded-l-md"></div>
       
-      {/* Formation: Using absolute positioning for each line */}
+      {/* Players */}
       <div className="absolute inset-0">
-        {/* Forwards */}
-        <div className="absolute top-[10%] w-full flex justify-around items-center">
-            {formation.forwards.map((p) => <PlayerCard key={p.id} player={p}/>)}
-        </div>
-
-        {/* Midfielders */}
-        <div className="absolute top-[35%] w-full flex justify-around items-center">
-             {formation.midfielders.map((p) => <PlayerCard key={p.id} player={p}/>)}
-        </div>
-
-        {/* Defenders */}
-        <div className="absolute top-[60%] w-full flex justify-around items-center">
-             {formation.defenders.map((p) => <PlayerCard key={p.id} player={p}/>)}
-        </div>
-
-        {/* Goalkeeper */}
-        <div className="absolute bottom-[5%] w-full flex justify-center items-center">
-             {formation.goalkeeper.map((p) => <PlayerCard key={p.id} player={p}/>)}
-        </div>
+        {formation.goalkeeper.map((p, i) => renderPlayer(p, formationPositions.goalkeeper, i))}
+        {formation.defenders.map((p, i) => renderPlayer(p, formationPositions.defenders, i))}
+        {formation.midfielders.map((p, i) => renderPlayer(p, formationPositions.midfielders, i))}
+        {formation.forwards.map((p, i) => renderPlayer(p, formationPositions.forwards, i))}
       </div>
     </div>
   );
