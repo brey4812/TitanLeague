@@ -7,9 +7,9 @@ import { LeagueContext } from "@/context/league-context";
 
 
 export default function LeaguesPage() {
-  const { divisions } = useContext(LeagueContext);
+  const { divisions, isLoaded } = useContext(LeagueContext);
 
-  if (!divisions.length) {
+  if (!isLoaded || !divisions.length) {
     return <div>Cargando...</div>
   }
 

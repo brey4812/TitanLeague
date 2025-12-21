@@ -5,9 +5,9 @@ import { H2hView } from "@/components/h2h/h2h-view";
 import { LeagueContext } from '@/context/league-context';
 
 export default function H2hPage() {
-    const { teams } = useContext(LeagueContext);
+    const { teams, isLoaded } = useContext(LeagueContext);
     
-    if (!teams.length) {
+    if (!isLoaded) {
       return <div>Cargando...</div>;
     }
 

@@ -5,9 +5,9 @@ import { TeamOfTheWeekView } from "@/components/team-of-the-week/team-of-the-wee
 import { LeagueContext } from "@/context/league-context";
 
 export default function TeamOfTheWeekPage() {
-  const { matches } = useContext(LeagueContext);
+  const { matches, isLoaded } = useContext(LeagueContext);
   
-  if (!matches.length) {
+  if (!isLoaded) {
     return <div>Cargando...</div>
   }
 

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { createContext, useState, ReactNode, useCallback } from "react";
+import { createContext, useState, ReactNode, useCallback, useEffect } from "react";
 import { Team, Division, MatchResult, Player, TeamOfTheWeekPlayer } from "@/lib/types";
 import { initialTeams, initialDivisions, initialMatchResults } from "@/lib/data";
 import { produce } from "immer";
@@ -11,6 +11,7 @@ interface LeagueContextType {
   divisions: Division[];
   matches: MatchResult[];
   players: Player[];
+  isLoaded: boolean;
   getTeamById: (id: number) => Team | undefined;
   getPlayerById: (id: number) => Player | undefined;
   getTeamByPlayerId: (playerId: number) => Team | undefined;
@@ -18,6 +19,7 @@ interface LeagueContextType {
   getTeamOfTheWeek: (week: number) => TeamOfTheWeekPlayer[];
   updateTeam: (updatedTeam: Team) => void;
   addTeam: (newTeam: Team) => void;
+  resetLeagueData: () => void;
 }
 
 export const LeagueContext = createContext<LeagueContextType>({
@@ -25,6 +27,7 @@ export const LeagueContext = createContext<LeagueContextType>({
   divisions: [],
   matches: [],
   players: [],
+  isLoaded: false,
   getTeamById: () => undefined,
   getPlayerById: () => undefined,
   getTeamByPlayerId: () => undefined,
@@ -32,6 +35,7 @@ export const LeagueContext = createContext<LeagueContextType>({
   getTeamOfTheWeek: () => [],
   updateTeam: () => {},
   addTeam: () => {},
+  resetLeagueData: () => {},
 });
 
 const getRandomPlayer = (team: Team): Player | null => {
@@ -41,17 +45,89 @@ const getRandomPlayer = (team: Team): Player | null => {
 }
 
 export const LeagueProvider = ({ children }: { children: ReactNode }) => {
-  const [teams, setTeams] = useState<Team[]>(() => JSON.parse(JSON.stringify(initialTeams)));
-  const [divisions, setDivisions] = useState<Division[]>(() => {
-    const divs = JSON.parse(JSON.stringify(initialDivisions));
-    // Hydrate teams into divisions
-    divs.forEach((div: Division) => {
-        div.teams = teams.filter(t => t.division === div.id);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [matches, setMatches] = useState<MatchResult[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedTeams = localStorage.getItem('league_teams');
+      const savedDivisions = localStorage.getItem('league_divisions');
+      const savedMatches = localStorage.getItem('league_matches');
+      const savedPlayers = localStorage.getItem('league_players');
+
+      if (savedTeams && savedDivisions && savedMatches && savedPlayers) {
+        setTeams(JSON.parse(savedTeams));
+        setDivisions(JSON.parse(savedDivisions));
+        setMatches(JSON.parse(savedMatches));
+        setPlayers(JSON.parse(savedPlayers));
+      } else {
+        // No saved data, initialize with default
+        const allPlayers = initialTeams.flatMap(t => t.roster);
+        setTeams(JSON.parse(JSON.stringify(initialTeams)));
+        setDivisions(() => {
+          const divs = JSON.parse(JSON.stringify(initialDivisions));
+          divs.forEach((div: Division) => {
+            div.teams = initialTeams.filter(t => t.division === div.id);
+          });
+          return divs;
+        });
+        setMatches(initialMatchResults);
+        setPlayers(allPlayers);
+      }
+    } catch (error) {
+      console.error("Failed to load data from localStorage", error);
+      // Fallback to initial data if parsing fails
+      const allPlayers = initialTeams.flatMap(t => t.roster);
+      setTeams(JSON.parse(JSON.stringify(initialTeams)));
+      setDivisions(() => {
+          const divs = JSON.parse(JSON.stringify(initialDivisions));
+          divs.forEach((div: Division) => {
+            div.teams = initialTeams.filter(t => t.division === div.id);
+          });
+          return divs;
+        });
+      setMatches(initialMatchResults);
+      setPlayers(allPlayers);
+    } finally {
+        setIsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded) {
+      try {
+        localStorage.setItem('league_teams', JSON.stringify(teams));
+        localStorage.setItem('league_divisions', JSON.stringify(divisions));
+        localStorage.setItem('league_matches', JSON.stringify(matches));
+        localStorage.setItem('league_players', JSON.stringify(players));
+      } catch (error) {
+        console.error("Failed to save data to localStorage", error);
+      }
+    }
+  }, [teams, divisions, matches, players, isLoaded]);
+  
+  const resetLeagueData = () => {
+    localStorage.removeItem('league_teams');
+    localStorage.removeItem('league_divisions');
+    localStorage.removeItem('league_matches');
+    localStorage.removeItem('league_players');
+
+    const allPlayers = initialTeams.flatMap(t => t.roster);
+    setTeams(JSON.parse(JSON.stringify(initialTeams)));
+    setDivisions(() => {
+      const divs = JSON.parse(JSON.stringify(initialDivisions));
+      divs.forEach((div: Division) => {
+        div.teams = initialTeams.filter(t => t.division === div.id);
+      });
+      return divs;
     });
-    return divs;
-  });
-  const [matches, setMatches] = useState<MatchResult[]>(initialMatchResults);
-  const [players, setPlayers] = useState<Player[]>(() => teams.flatMap(t => t.roster));
+    setMatches(initialMatchResults);
+    setPlayers(allPlayers);
+  };
+
 
   const getTeamById = useCallback((id: number) => {
     return teams.find(t => t.id === id);
@@ -67,17 +143,23 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
 
   const updateTeam = (updatedTeam: Team) => {
+    const allPlayers = teams.flatMap(t => t.roster);
+    setPlayers(allPlayers);
     setTeams(currentTeams => currentTeams.map(t => t.id === updatedTeam.id ? updatedTeam : t));
-    setDivisions(produce(draft => {
+    setDivisions(produce((draft: Division[]) => {
         draft.forEach(division => {
             const teamIndex = division.teams.findIndex(t => t.id === updatedTeam.id);
             if (teamIndex !== -1) {
+                // If team is in this division
                 if (division.id === updatedTeam.division) {
+                    // Just update it
                     division.teams[teamIndex] = updatedTeam;
                 } else {
+                    // It moved divisions, remove from here
                     division.teams.splice(teamIndex, 1);
                 }
             } else if (division.id === updatedTeam.division) {
+                // It moved into this division, add it
                 division.teams.push(updatedTeam);
             }
         });
@@ -87,7 +169,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   const addTeam = (newTeam: Team) => {
     const newTeamWithId = { ...newTeam, id: Math.max(0, ...teams.map(t => t.id)) + 1 };
     setTeams(currentTeams => [...currentTeams, newTeamWithId]);
-     setDivisions(produce(draft => {
+     setDivisions(produce((draft: Division[]) => {
         const division = draft.find(d => d.id === newTeamWithId.division);
         if (division) {
             division.teams.push(newTeamWithId);
@@ -107,22 +189,18 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         divisions.forEach(division => {
             const teamsInDivision = [...division.teams];
             
-            while (teamsInDivision.length >= 2) {
-                const team1Index = Math.floor(Math.random() * teamsInDivision.length);
-                const team1 = teamsInDivision.splice(team1Index, 1)[0];
-                
-                const team2Index = Math.floor(Math.random() * teamsInDivision.length);
-                const team2 = teamsInDivision.splice(team2Index, 1)[0];
+            // Simple round-robin pairing for simulation
+            for (let i = 0; i < teamsInDivision.length; i += 2) {
+                if (i + 1 >= teamsInDivision.length) continue;
 
-                if (!team1 || !team2) continue;
-
-                const homeTeam = Math.random() > 0.5 ? team1 : team2;
-                const awayTeam = homeTeam.id === team1.id ? team2 : team1;
+                const homeTeam = teamsInDivision[i];
+                const awayTeam = teamsInDivision[i+1];
 
                 const homeScore = Math.floor(Math.random() * 5);
                 const awayScore = Math.floor(Math.random() * 5);
                 
                 let mvpPlayer: Player | null = null;
+                
                 const homeTeamForMvp = getTeamById(homeTeam.id);
                 const awayTeamForMvp = getTeamById(awayTeam.id);
 
@@ -175,7 +253,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     setMatches(prevMatches => [...prevMatches, ...newMatches]);
 
     // Update divisions with new team stats
-    setDivisions(produce(draft => {
+    setDivisions(produce((draft: Division[]) => {
         draft.forEach(division => {
             division.teams = updatedTeams.filter(t => t.division === division.id);
         });
@@ -235,13 +313,15 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       divisions,
       matches,
       players,
+      isLoaded,
       getTeamById,
       getPlayerById,
       getTeamByPlayerId,
       simulateMatchday,
       getTeamOfTheWeek,
       updateTeam,
-      addTeam
+      addTeam,
+      resetLeagueData
     }}>
       {children}
     </LeagueContext.Provider>

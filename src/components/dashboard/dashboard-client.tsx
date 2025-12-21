@@ -56,7 +56,7 @@ const MatchCard = ({ match, getTeamById, getPlayerById }: { match: MatchResult, 
   
 
 export function DashboardClient() {
-  const { matches, divisions, getTeamById, getPlayerById, simulateMatchday } = useContext(LeagueContext);
+  const { matches, divisions, getTeamById, getPlayerById, simulateMatchday, isLoaded } = useContext(LeagueContext);
   const [isPending, startTransition] = useTransition();
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
   const [pressNotes, setPressNotes] = useState<string | null>(null);
@@ -67,22 +67,22 @@ export function DashboardClient() {
 
   const maxWeek = useMemo(() => matches.reduce((max, m) => Math.max(max, m.week), 0), [matches]);
   const [displayedWeek, setDisplayedWeek] = useState(maxWeek);
-  const [displayedDivision, setDisplayedDivision] = useState<string>(String(divisions[0]?.id || '1'));
+  const [displayedDivision, setDisplayedDivision] = useState<string>('1');
   
   useEffect(() => {
-    setDisplayedWeek(maxWeek);
-  }, [maxWeek]);
-  
-  useEffect(() => {
-    if (divisions.length > 0) {
-      setDisplayedDivision(String(divisions[0].id))
+    if (isLoaded) {
+      const maxW = matches.reduce((max, m) => Math.max(max, m.week), 0)
+      setDisplayedWeek(maxW);
+      if (divisions.length > 0) {
+        setDisplayedDivision(String(divisions[0].id))
+      }
     }
-  }, [divisions])
+  }, [isLoaded, divisions, matches]);
 
 
   const matchesForDisplayedWeek = useMemo(() => {
     const divisionId = parseInt(displayedDivision);
-    if (isNaN(divisionId)) return [];
+    if (isNaN(divisionId) || !isLoaded) return [];
     
     return matches
       .filter(m => {
@@ -90,7 +90,7 @@ export function DashboardClient() {
         return m.week === displayedWeek && homeTeam?.division === divisionId;
       })
       .sort((a,b) => b.id - a.id);
-  }, [matches, displayedWeek, displayedDivision, getTeamById]);
+  }, [matches, displayedWeek, displayedDivision, getTeamById, isLoaded]);
 
 
   const handleDownloadPressNotes = async () => {
@@ -175,6 +175,7 @@ export function DashboardClient() {
     // Effect to listen for custom event
     useEffect(() => {
         const listener = (event: Event) => {
+            if (typeof document === 'undefined') return;
             const match = (event as CustomEvent).detail;
             handleShowPressNotes(match);
         };
@@ -189,6 +190,7 @@ export function DashboardClient() {
     startTransition(() => {
         const newWeek = maxWeek + 1;
         simulateMatchday();
+        setDisplayedWeek(newWeek);
         toast({
             title: `Jornada ${newWeek} Simulada`,
             description: "Se han generado nuevos resultados de partidos para todas las divisiones."
@@ -215,6 +217,21 @@ export function DashboardClient() {
   
   const homeTeam = selectedMatch ? getTeamById(selectedMatch.homeTeamId) : null;
   const awayTeam = selectedMatch ? getTeamById(selectedMatch.awayTeamId) : null;
+
+  if (!isLoaded) {
+    return (
+        <Card className="lg:col-span-3">
+            <CardHeader><Skeleton className="h-8 w-48" /></CardHeader>
+            <CardContent>
+                <div className="space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                </div>
+            </CardContent>
+        </Card>
+    )
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

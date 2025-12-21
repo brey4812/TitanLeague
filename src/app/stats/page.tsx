@@ -10,7 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { LeagueContext } from "@/context/league-context";
 
 const PlayerStatsTable = ({ players, statKey, statLabel }: { players: Player[], statKey: 'goals' | 'assists' | 'cleanSheets', statLabel: string }) => {
-    const { getTeamByPlayerId } = useContext(LeagueContext);
+    const { getTeamByPlayerId, isLoaded } = useContext(LeagueContext);
+
+    if (!isLoaded) {
+      return null;
+    }
     
     return (
         <Card>
@@ -52,9 +56,9 @@ const PlayerStatsTable = ({ players, statKey, statLabel }: { players: Player[], 
 }
 
 export default function StatsPage() {
-  const { players } = useContext(LeagueContext);
+  const { players, isLoaded } = useContext(LeagueContext);
   
-  if (!players.length) {
+  if (!isLoaded) {
     return <div>Cargando...</div>
   }
 

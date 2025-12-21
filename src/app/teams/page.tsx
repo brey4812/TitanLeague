@@ -11,7 +11,7 @@ import { LeagueContext } from '@/context/league-context';
 
 
 export default function TeamsPage() {
-  const { teams, divisions, updateTeam, addTeam } = useContext(LeagueContext);
+  const { teams, divisions, updateTeam, addTeam, isLoaded } = useContext(LeagueContext);
   const [selectedTeam, setSelectedTeam] = React.useState<Team | null>(null);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
 
@@ -34,6 +34,10 @@ export default function TeamsPage() {
     setIsFormOpen(false);
     setSelectedTeam(null);
   };
+  
+  if (!isLoaded) {
+    return <div>Cargando...</div>;
+  }
 
   return (
     <>

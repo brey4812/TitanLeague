@@ -8,9 +8,9 @@ import { Icons } from "@/components/icons";
 import { LeagueContext } from '@/context/league-context';
 
 export default function DashboardPage() {
-  const { teams, players, matches } = useContext(LeagueContext);
+  const { teams, players, matches, isLoaded } = useContext(LeagueContext);
 
-  if (!teams.length || !players.length) {
+  if (!isLoaded) {
     return <div>Cargando...</div>;
   }
   
