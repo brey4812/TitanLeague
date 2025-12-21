@@ -13,15 +13,14 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/icons";
 
 const navItems = [
-  { href: "/", icon: Icons.Dashboard, label: "Dashboard" },
-  { href: "/leagues", icon: Icons.League, label: "Leagues" },
-  { href: "/teams", icon: Icons.Teams, label: "Teams" },
-  { href: "/tournaments", icon: Icons.Tournaments, label: "Tournaments" },
-  { href: "/stats", icon: Icons.Stats, label: "Stats" },
+  { href: "/", icon: Icons.Dashboard, label: "Panel" },
+  { href: "/leagues", icon: Icons.League, label: "Ligas" },
+  { href: "/teams", icon: Icons.Teams, label: "Equipos" },
+  { href: "/tournaments", icon: Icons.Tournaments, label: "Torneos" },
+  { href: "/stats", icon: Icons.Stats, label: "Estadísticas" },
   { href: "/h2h", icon: Icons.H2H, label: "H2H" },
 ];
 
@@ -33,7 +32,7 @@ export function SidebarNav() {
       <SidebarHeader>
         <Link href="/" className="flex items-center gap-2">
           <Icons.Logo className="w-8 h-8 text-primary" />
-          <h1 className="text-xl font-bold font-headline text-primary">Titan League</h1>
+          <h1 className="text-xl font-bold font-headline text-primary">Liga Titán</h1>
         </Link>
       </SidebarHeader>
       <SidebarContent>
@@ -61,12 +60,12 @@ export function SidebarNav() {
              <SidebarMenuButton
                 asChild
                 isActive={pathname === "/settings"}
-                tooltip={{ children: "Settings" }}
+                tooltip={{ children: "Configuración" }}
                 className="justify-start"
               >
                 <Link href="/settings">
                   <Icons.Settings />
-                  <span>Settings</span>
+                  <span>Configuración</span>
                 </Link>
               </SidebarMenuButton>
           </SidebarMenuItem>

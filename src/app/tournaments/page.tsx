@@ -10,9 +10,9 @@ const PlaceholderContent = ({ title }: { title: string }) => (
         </CardHeader>
         <CardContent>
             <div className="flex flex-col items-center justify-center text-center text-muted-foreground h-64 border-2 border-dashed rounded-lg">
-                <Icons.Tournaments className="h-12 w-12 mb-4" />
-                <p className="text-lg font-medium">Coming Soon</p>
-                <p>The {title} bracket and results will be displayed here.</p>
+                <Icons.Trophy className="h-12 w-12 mb-4" />
+                <p className="text-lg font-medium">Próximamente</p>
+                <p>El cuadro y los resultados de {title} se mostrarán aquí.</p>
             </div>
         </CardContent>
     </Card>
@@ -22,8 +22,8 @@ export default function TournamentsPage() {
   return (
     <>
       <PageHeader
-        title="Tournaments"
-        description="Follow the knockout stages of the Titan Champions, Copa, and Supercopa."
+        title="Torneos"
+        description="Sigue las fases eliminatorias de la Titan Champions, la Copa y la Supercopa."
       />
       <Tabs defaultValue="champions" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
@@ -35,10 +35,10 @@ export default function TournamentsPage() {
           <PlaceholderContent title="Titan Champions" />
         </TabsContent>
         <TabsContent value="copa" className="mt-6">
-          <PlaceholderContent title="Copa del Titan" />
+          <PlaceholderContent title="Copa del Titán" />
         </TabsContent>
         <TabsContent value="supercopa" className="mt-6">
-            <PlaceholderContent title="Supercopa Titan" />
+            <PlaceholderContent title="Supercopa Titán" />
         </TabsContent>
       </Tabs>
     </>

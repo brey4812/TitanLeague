@@ -30,14 +30,14 @@ export function LeagueTable({ division }: LeagueTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead className="w-12 text-center">#</TableHead>
-            <TableHead>Team</TableHead>
-            <TableHead className="text-center">MP</TableHead>
-            <TableHead className="text-center">W</TableHead>
+            <TableHead>Equipo</TableHead>
+            <TableHead className="text-center">PJ</TableHead>
+            <TableHead className="text-center">V</TableHead>
+            <TableHead className="text-center">E</TableHead>
             <TableHead className="text-center">D</TableHead>
-            <TableHead className="text-center">L</TableHead>
             <TableHead className="text-center">GF</TableHead>
-            <TableHead className="text-center">GA</TableHead>
-            <TableHead className="text-center">GD</TableHead>
+            <TableHead className="text-center">GC</TableHead>
+            <TableHead className="text-center">DG</TableHead>
             <TableHead className="text-center">Pts</TableHead>
           </TableRow>
         </TableHeader>

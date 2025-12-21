@@ -33,13 +33,13 @@ export function H2hView({ teams }: H2hViewProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Select Teams</CardTitle>
+        <CardTitle>Seleccionar Equipos</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
           <Select onValueChange={setTeam1Id}>
             <SelectTrigger>
-              <SelectValue placeholder="Select Team 1" />
+              <SelectValue placeholder="Seleccionar Equipo 1" />
             </SelectTrigger>
             <SelectContent>
               {teams.map(team => (
@@ -52,7 +52,7 @@ export function H2hView({ teams }: H2hViewProps) {
           <span className="text-center font-bold text-muted-foreground">vs</span>
           <Select onValueChange={setTeam2Id}>
             <SelectTrigger>
-              <SelectValue placeholder="Select Team 2" />
+              <SelectValue placeholder="Seleccionar Equipo 2" />
             </SelectTrigger>
             <SelectContent>
               {teams.map(team => (
@@ -65,12 +65,12 @@ export function H2hView({ teams }: H2hViewProps) {
         </div>
         <div className="flex justify-center mt-6">
           <Button onClick={handleShowH2h} disabled={!team1Id || !team2Id}>
-            Show Head-to-Head
+            Mostrar Cara a Cara
           </Button>
         </div>
         {result && team1 && team2 && (
           <div className="mt-8">
-            <h3 className="text-center text-2xl font-bold mb-6 font-headline">Historical H2H</h3>
+            <h3 className="text-center text-2xl font-bold mb-6 font-headline">H2H Histórico</h3>
             <div className="flex justify-around items-center text-center">
               <div className="flex flex-col items-center gap-2">
                 <Image src={team1.logoUrl} alt={team1.name} width={80} height={80} className="rounded-full" data-ai-hint={team1.dataAiHint} />
@@ -88,7 +88,7 @@ export function H2hView({ teams }: H2hViewProps) {
                 <p className="font-bold text-lg">{team2.name}</p>
               </div>
             </div>
-             <p className="text-center text-xs text-muted-foreground mt-2">W - D - L</p>
+             <p className="text-center text-xs text-muted-foreground mt-2">V - E - D</p>
           </div>
         )}
       </CardContent>

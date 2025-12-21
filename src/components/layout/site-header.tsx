@@ -6,7 +6,7 @@ export function SiteHeader() {
       <div className="container flex h-14 items-center">
         <div className="flex items-center space-x-2">
           <SidebarTrigger />
-          <h1 className="font-bold font-headline text-lg">Titan League</h1>
+          <h1 className="font-bold font-headline text-lg">Liga Titán</h1>
         </div>
       </div>
     </header>

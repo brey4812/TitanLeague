@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { generateStatsAction } from "@/app/actions";
-import { Icons } from "@/components/icons";
 
 export function SettingsClient() {
   const [isPending, startTransition] = useTransition();
@@ -14,13 +13,13 @@ export function SettingsClient() {
   const handleGenerateStats = () => {
     startTransition(async () => {
       toast({
-        title: "Generating Stats...",
-        description: "The AI is creating initial player data. This may take a moment.",
+        title: "Generando Estadísticas...",
+        description: "La IA está creando datos iniciales de jugadores. Esto puede tardar un momento.",
       });
       const result = await generateStatsAction();
       if (result.success) {
         toast({
-          title: "Success!",
+          title: "¡Éxito!",
           description: result.message,
         });
       } else {
@@ -36,21 +35,21 @@ export function SettingsClient() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Data Management</CardTitle>
+        <CardTitle>Gestión de Datos</CardTitle>
         <CardDescription>
-          Use AI to populate your league with initial data.
+          Usa la IA para poblar tu liga con datos iniciales.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between p-4 border rounded-lg">
           <div>
-            <h4 className="font-medium">Generate Initial Player Stats</h4>
+            <h4 className="font-medium">Generar Estadísticas Iniciales de Jugadores</h4>
             <p className="text-sm text-muted-foreground">
-              Create a full roster of players for all teams in the league automatically.
+              Crea una lista completa de jugadores para todos los equipos de la liga automáticamente.
             </p>
           </div>
           <Button onClick={handleGenerateStats} disabled={isPending}>
-            {isPending ? "Generating..." : "Generate"}
+            {isPending ? "Generando..." : "Generar"}
           </Button>
         </div>
       </CardContent>

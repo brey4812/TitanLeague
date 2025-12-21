@@ -20,15 +20,15 @@ export function LeagueTableClient({ division }: LeagueTableClientProps) {
         if (!tableRef.current) {
             toast({
                 title: 'Error',
-                description: 'Could not find table to download.',
+                description: 'No se pudo encontrar la tabla para descargar.',
                 variant: 'destructive'
             });
             return;
         }
 
         toast({
-            title: 'Generating Image...',
-            description: 'Please wait while we create the image.'
+            title: 'Generando Imagen...',
+            description: 'Por favor espera mientras creamos la imagen.'
         });
 
         try {
@@ -37,14 +37,14 @@ export function LeagueTableClient({ division }: LeagueTableClientProps) {
                 backgroundColor: null, // Use transparent background
             });
             const link = document.createElement('a');
-            link.download = `${division.name.toLowerCase().replace(/\s/g, '-')}-table.png`;
+            link.download = `${division.name.toLowerCase().replace(/\s/g, '-')}-tabla.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
         } catch (error) {
             console.error(error);
             toast({
-                title: 'Download Failed',
-                description: 'Something went wrong while generating the image.',
+                title: 'Descarga Fallida',
+                description: 'Algo salió mal mientras se generaba la imagen.',
                 variant: 'destructive'
             });
         }
@@ -55,7 +55,7 @@ export function LeagueTableClient({ division }: LeagueTableClientProps) {
             <div className="flex justify-end mb-4">
                 <Button onClick={handleDownload} variant="outline">
                     <Icons.Download className="mr-2 h-4 w-4" />
-                    Download as Image
+                    Descargar como Imagen
                 </Button>
             </div>
             <div ref={tableRef}>

@@ -5,8 +5,8 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader
-        title="Settings"
-        description="Manage application settings and data."
+        title="Configuración"
+        description="Gestiona la configuración y los datos de la aplicación."
       />
       <div className="space-y-8">
         <SettingsClient />

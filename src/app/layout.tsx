@@ -7,8 +7,8 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { SiteHeader } from "@/components/layout/site-header";
 
 export const metadata: Metadata = {
-  title: 'Titan League Simulator',
-  description: 'A complete football league simulation.',
+  title: 'Simulador de Liga Titán',
+  description: 'Una simulación completa de una liga de fútbol.',
 };
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

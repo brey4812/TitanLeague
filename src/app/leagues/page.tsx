@@ -7,8 +7,8 @@ export default function LeaguesPage() {
   return (
     <>
       <PageHeader
-        title="Leagues"
-        description="View the current standings for all divisions in the Titan League."
+        title="Ligas"
+        description="Consulta la clasificación actual de todas las divisiones de la Liga Titán."
       />
       <Tabs defaultValue={divisions[0].name} className="w-full">
         <TabsList className="grid w-full grid-cols-1 md:grid-cols-4">

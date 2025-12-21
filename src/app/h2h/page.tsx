@@ -7,8 +7,8 @@ export default function H2hPage() {
   return (
     <>
       <PageHeader
-        title="Head-to-Head"
-        description="Compare the historical record between any two teams in the league."
+        title="Cara a Cara (H2H)"
+        description="Compara el historial de enfrentamientos entre dos equipos de la liga."
       />
       <H2hView teams={teams} />
     </>

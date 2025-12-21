@@ -44,7 +44,7 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
     const awayTeam = getTeamById(match.awayTeamId);
 
     if (!homeTeam || !awayTeam) {
-        toast({ title: "Error", description: "Team data not found.", variant: "destructive" });
+        toast({ title: "Error", description: "Datos del equipo no encontrados.", variant: "destructive" });
         setIsLoading(false);
         return;
     }
@@ -131,8 +131,8 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
     <>
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Recent Results</CardTitle>
-          <Button><Icons.Play /> Simulate Matchday</Button>
+          <CardTitle>Resultados Recientes</CardTitle>
+          <Button><Icons.Play /> Simular Jornada</Button>
         </CardHeader>
         <CardContent className="p-0">
           {recentMatches.map((match) => (
@@ -167,7 +167,7 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
             <DialogFooter className="p-6 bg-muted/50">
               <Button onClick={handleDownloadPressNotes}>
                 <Icons.Download className="mr-2 h-4 w-4" />
-                Download
+                Descargar
               </Button>
             </DialogFooter>
           )}

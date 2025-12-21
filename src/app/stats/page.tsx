@@ -18,9 +18,9 @@ const PlayerStatsTable = ({ players, statKey, statLabel }: { players: Player[], 
                 <TableHeader>
                     <TableRow>
                         <TableHead className="w-12 text-center">#</TableHead>
-                        <TableHead>Player</TableHead>
-                        <TableHead>Team</TableHead>
-                        <TableHead>Position</TableHead>
+                        <TableHead>Jugador</TableHead>
+                        <TableHead>Equipo</TableHead>
+                        <TableHead>Posición</TableHead>
                         <TableHead className="text-center">{statLabel}</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -55,23 +55,23 @@ export default function StatsPage() {
   return (
     <>
       <PageHeader
-        title="Player Statistics"
-        description="Leaderboards for individual performance across the Titan League."
+        title="Estadísticas de Jugadores"
+        description="Clasificación del rendimiento individual en la Liga Titán."
       />
        <Tabs defaultValue="scorers" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="scorers">Top Scorers</TabsTrigger>
-          <TabsTrigger value="assists">Top Assists</TabsTrigger>
-          <TabsTrigger value="clean-sheets">Clean Sheets</TabsTrigger>
+          <TabsTrigger value="scorers">Máximos Goleadores</TabsTrigger>
+          <TabsTrigger value="assists">Máximos Asistentes</TabsTrigger>
+          <TabsTrigger value="clean-sheets">Porterías a Cero</TabsTrigger>
         </TabsList>
         <TabsContent value="scorers" className="mt-6">
-          <PlayerStatsTable players={topScorers} statKey="goals" statLabel="Goals" />
+          <PlayerStatsTable players={topScorers} statKey="goals" statLabel="Goles" />
         </TabsContent>
         <TabsContent value="assists" className="mt-6">
-          <PlayerStatsTable players={topAssists} statKey="assists" statLabel="Assists" />
+          <PlayerStatsTable players={topAssists} statKey="assists" statLabel="Asistencias" />
         </TabsContent>
         <TabsContent value="clean-sheets" className="mt-6">
-            <PlayerStatsTable players={topCleanSheets} statKey="cleanSheets" statLabel="Clean Sheets" />
+            <PlayerStatsTable players={topCleanSheets} statKey="cleanSheets" statLabel="Porterías a Cero" />
         </TabsContent>
       </Tabs>
     </>
