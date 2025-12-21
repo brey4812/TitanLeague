@@ -12,26 +12,16 @@ interface FootballFieldProps {
 }
 
 const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
-  <div className="relative flex flex-col items-center text-center w-24 group transition-transform duration-300 hover:scale-110 drop-shadow-2xl">
-    <div className="relative w-16 h-16">
-      <Image
-        src={player.teamLogoUrl}
-        alt={player.teamName}
-        width={64}
-        height={64}
-        className="rounded-full border-2 border-white bg-gray-200 object-cover"
-        data-ai-hint={player.teamDataAiHint}
-      />
-    </div>
-    {/* This structure is more robust for html2canvas rendering */}
-    <div className="absolute bottom-[-10px] w-full text-center">
-        <p 
-          className="text-white text-xs font-bold truncate"
-          style={{ textShadow: '0px 1px 3px rgba(0, 0, 0, 0.7)' }}
-        >
-          {player.name}
-        </p>
-    </div>
+  <div
+    className="relative flex h-16 w-16 items-end justify-center rounded-full border-2 border-white bg-gray-200 bg-cover bg-center drop-shadow-2xl transition-transform duration-300 hover:scale-110"
+    style={{ backgroundImage: `url(${player.teamLogoUrl})` }}
+  >
+    <p
+      className="w-full truncate text-center text-[10px] font-bold text-white"
+      style={{ textShadow: '0px 1px 4px rgba(0, 0, 0, 0.9)' }}
+    >
+      {player.name}
+    </p>
   </div>
 );
 
