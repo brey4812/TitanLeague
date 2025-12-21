@@ -162,4 +162,8 @@ export const getAllTeams = (): Team[] => teams;
 
 export const getTeamById = (id: number): Team | undefined => teams.find(t => t.id === id);
 
+export const getTeamByPlayerId = (playerId: number): Team | undefined => {
+    return teams.find(team => team.roster.some(player => player.id === playerId));
+};
+
 export const getAllPlayers = (): Player[] => teams.flatMap(t => t.roster);

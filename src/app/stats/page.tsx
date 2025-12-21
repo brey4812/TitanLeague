@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
-import { getAllPlayers, getTeamById } from "@/lib/data";
+import { getAllPlayers, getTeamByPlayerId } from "@/lib/data";
 import { Player } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 
@@ -12,15 +12,6 @@ const topAssists = [...getAllPlayers()].sort((a, b) => b.stats.assists - a.stats
 const topCleanSheets = [...getAllPlayers()].filter(p => p.position === 'Goalkeeper').sort((a, b) => b.stats.cleanSheets - a.stats.cleanSheets).slice(0, 10);
 
 const PlayerStatsTable = ({ players, statKey, statLabel }: { players: Player[], statKey: 'goals' | 'assists' | 'cleanSheets', statLabel: string }) => {
-    const findTeam = (player: Player) => {
-        const teams = getAllPlayers();
-        // This is inefficient for a real app, but fine for mock data.
-        // In a real app, player would have a teamId.
-        const allTeams = getTeamById(1)!.roster.includes(player) ? getTeamById(1) : getTeamById(2); // Simplified
-        const team = getTeamById(Math.floor(player.id / 100));
-        return team;
-    }
-
     return (
         <Card>
             <Table>
@@ -35,7 +26,7 @@ const PlayerStatsTable = ({ players, statKey, statLabel }: { players: Player[], 
                 </TableHeader>
                 <TableBody>
                     {players.map((player, index) => {
-                        const team = findTeam(player);
+                        const team = getTeamByPlayerId(player.id);
                         return (
                         <TableRow key={player.id}>
                             <TableCell className="font-medium text-center">{index + 1}</TableCell>
