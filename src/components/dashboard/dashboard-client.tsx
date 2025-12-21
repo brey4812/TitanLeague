@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useTransition } from "react";
 import Image from "next/image";
-import type { MatchResult } from "@/lib/types";
-import { getTeamById, divisions } from "@/lib/data";
+import type { MatchResult, Team } from "@/lib/types";
+import { getTeamById, getAllTeams } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -18,7 +18,30 @@ interface DashboardClientProps {
   recentMatches: MatchResult[];
 }
 
-export function DashboardClient({ recentMatches }: DashboardClientProps) {
+// Helper function to get two random distinct teams
+const getTwoRandomTeams = (teams: Team[], existingPairs: [number, number][]): [Team, Team] | null => {
+    let team1: Team, team2: Team;
+    let attempts = 0;
+    
+    // Avoid infinite loops if all pairs are taken
+    if (existingPairs.length >= (teams.length * (teams.length - 1)) / 2) {
+        return null;
+    }
+
+    do {
+        team1 = teams[Math.floor(Math.random() * teams.length)];
+        team2 = teams[Math.floor(Math.random() * teams.length)];
+        attempts++;
+    } while ((team1.id === team2.id || existingPairs.some(p => (p[0] === team1.id && p[1] === team2.id) || (p[0] === team2.id && p[1] === team1.id))) && attempts < 50);
+
+    if (team1.id === team2.id) return null;
+
+    return [team1, team2];
+}
+
+export function DashboardClient({ recentMatches: initialMatches }: DashboardClientProps) {
+  const [isPending, startTransition] = useTransition();
+  const [recentMatches, setRecentMatches] = useState(initialMatches);
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
   const [pressNotes, setPressNotes] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,6 +101,42 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
     setIsLoading(false);
   };
 
+  const handleSimulateMatchday = () => {
+    startTransition(() => {
+        const allTeams = getAllTeams();
+        const newMatches: MatchResult[] = [];
+        const matchesPerSimulation = 4;
+        const existingPairs: [number, number][] = recentMatches.map(m => [m.homeTeamId, m.awayTeamId]);
+
+        const latestWeek = recentMatches.reduce((max, m) => Math.max(max, m.week), 0);
+        const latestId = recentMatches.reduce((max, m) => Math.max(max, m.id), 0);
+
+        for(let i = 0; i < matchesPerSimulation; i++) {
+            const teamPair = getTwoRandomTeams(allTeams, existingPairs);
+            if(teamPair) {
+                const [homeTeam, awayTeam] = teamPair;
+                existingPairs.push([homeTeam.id, awayTeam.id]);
+                newMatches.push({
+                    id: latestId + i + 1,
+                    season: 1,
+                    week: latestWeek + 1,
+                    homeTeamId: homeTeam.id,
+                    awayTeamId: awayTeam.id,
+                    homeScore: Math.floor(Math.random() * 5),
+                    awayScore: Math.floor(Math.random() * 5),
+                    isImportant: Math.random() > 0.7
+                });
+            }
+        }
+
+        setRecentMatches(prevMatches => [...newMatches, ...prevMatches].slice(0, 4));
+        toast({
+            title: "Jornada Simulada",
+            description: "Se han generado nuevos resultados de partidos."
+        })
+    });
+};
+
   const MatchCard = ({ match }: { match: MatchResult }) => {
     const homeTeam = getTeamById(match.homeTeamId);
     const awayTeam = getTeamById(match.awayTeamId);
@@ -94,8 +153,8 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
           <span>{match.homeScore} - {match.awayScore}</span>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 flex-1">
-          <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
           <span className="font-medium text-left w-20 sm:w-32 truncate">{awayTeam.name}</span>
+          <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
         </div>
         <div className="flex flex-col sm:flex-row gap-1">
             {match.isImportant && (
@@ -133,7 +192,9 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Resultados Recientes</CardTitle>
-          <Button><Icons.Play /> Simular Jornada</Button>
+          <Button onClick={handleSimulateMatchday} disabled={isPending}>
+            {isPending ? 'Simulando...' : <><Icons.Play className="mr-2"/> Simular Jornada</>}
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           {recentMatches.map((match) => (
@@ -184,3 +245,5 @@ export function DashboardClient({ recentMatches }: DashboardClientProps) {
     </>
   );
 }
+
+    
