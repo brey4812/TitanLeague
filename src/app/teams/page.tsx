@@ -26,14 +26,16 @@ export default function TeamsPage() {
   };
 
   const handleFormSave = (teamData: Team) => {
-    // This is a mock save. In a real app, you'd call an API here.
     if (selectedTeam) {
-      setTeams(teams.map(t => t.id === teamData.id ? teamData : t));
+      // It's an existing team, so we update it
+      setTeams(currentTeams => currentTeams.map(t => t.id === teamData.id ? teamData : t));
     } else {
-      const newTeam = { ...teamData, id: Math.max(...teams.map(t => t.id)) + 1 };
-      setTeams([...teams, newTeam]);
+      // It's a new team, we add it
+      const newTeamWithId = { ...teamData, id: Math.max(0, ...teams.map(t => t.id)) + 1 };
+      setTeams(currentTeams => [...currentTeams, newTeamWithId]);
     }
     setIsFormOpen(false);
+    setSelectedTeam(null);
   };
 
   return (
@@ -45,7 +47,7 @@ export default function TeamsPage() {
         <Button onClick={handleAddTeam}>Añadir Nuevo Equipo</Button>
       </PageHeader>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {teams.map((team) => (
+        {teams.sort((a, b) => a.name.localeCompare(b.name)).map((team) => (
           <Card key={team.id} className="flex flex-col">
             <CardHeader className="flex-row items-center gap-4">
                 <Image
@@ -53,7 +55,7 @@ export default function TeamsPage() {
                     alt={`${team.name} logo`}
                     width={48}
                     height={48}
-                    className="rounded-full"
+                    className="rounded-full bg-muted object-cover"
                     data-ai-hint={team.dataAiHint}
                 />
                 <CardTitle className="font-headline text-lg">{team.name}</CardTitle>
@@ -79,7 +81,7 @@ export default function TeamsPage() {
         onOpenChange={setIsFormOpen}
         onSave={handleFormSave}
         team={selectedTeam}
-        divisions={divisions}
+        divisions={divisions.map(({ id, name }) => ({ id, name }))}
       />
     </>
   );
