@@ -12,16 +12,20 @@ interface FootballFieldProps {
 }
 
 const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
-    <div className="relative flex flex-col items-center w-24">
-      <div
-        className="h-16 w-16 rounded-full border-2 border-white bg-gray-200 bg-cover bg-center drop-shadow-lg"
-        style={{ backgroundImage: `url(${player.teamLogoUrl})` }}
-      ></div>
-      <div className="relative -mt-3 w-auto">
+    <div className="relative flex flex-col items-center w-20 sm:w-24">
+      <div className="relative h-14 w-14 sm:h-16 sm:w-16">
+        <Image
+          src={player.teamLogoUrl}
+          alt={`${player.name}'s team logo`}
+          layout="fill"
+          className="rounded-full border-2 border-white bg-gray-200 object-cover drop-shadow-lg"
+        />
+      </div>
+      <div className="relative -mt-3 w-auto max-w-full">
         <p
-            className="whitespace-nowrap rounded-md bg-white px-2 py-0.5 text-center text-xs font-bold text-black shadow-lg"
+          className="whitespace-nowrap rounded-md bg-white px-2 py-0.5 text-center text-[10px] sm:text-xs font-bold text-black shadow-lg"
         >
-            {player.name}
+          {player.name}
         </p>
       </div>
     </div>
@@ -61,8 +65,8 @@ export function FootballField({ formation }: FootballFieldProps) {
     return (
         <div 
             key={player.id} 
-            className="absolute z-10"
-            style={{ top: `${top}%`, left: `${left}%`, transform: 'translate(-50%, -50%)' }}
+            className="absolute"
+            style={{ top: `${top}%`, left: `${left}%`, transform: 'translate(-50%, -50%)', zIndex: 10 + index }}
         >
             <PlayerCard player={player} />
         </div>
@@ -70,7 +74,7 @@ export function FootballField({ formation }: FootballFieldProps) {
   };
 
   return (
-    <div className="relative w-full max-w-lg mx-auto aspect-[3/4] rounded-lg border-4 border-white/30 overflow-hidden shadow-2xl bg-gradient-to-br from-green-500 via-green-600 to-emerald-700 p-4">
+    <div className="relative w-full max-w-md mx-auto aspect-[3/4] rounded-lg border-4 border-white/30 overflow-hidden shadow-2xl bg-gradient-to-br from-green-500 via-green-600 to-emerald-700 p-2 sm:p-4">
         {/* Field lines using SVG for crispness and vertical orientation */}
         <svg width="100%" height="100%" viewBox="0 0 200 300" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
             <rect width="200" height="300" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />

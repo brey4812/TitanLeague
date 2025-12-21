@@ -31,6 +31,8 @@ export function H2hView({ teams }: H2hViewProps) {
 
   const team1 = team1Id ? getTeamById(parseInt(team1Id)) : null;
   const team2 = team2Id ? getTeamById(parseInt(team2Id)) : null;
+  
+  const sortedTeams = [...teams].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <Card>
@@ -38,26 +40,26 @@ export function H2hView({ teams }: H2hViewProps) {
         <CardTitle>Seleccionar Equipos</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
           <Select onValueChange={setTeam1Id}>
             <SelectTrigger>
               <SelectValue placeholder="Seleccionar Equipo 1" />
             </SelectTrigger>
             <SelectContent>
-              {teams.map(team => (
+              {sortedTeams.map(team => (
                 <SelectItem key={team.id} value={String(team.id)} disabled={team.id === (team2Id ? parseInt(team2Id) : -1)}>
                   {team.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <span className="text-center font-bold text-muted-foreground">vs</span>
+          <span className="text-center font-bold text-muted-foreground hidden md:block">vs</span>
           <Select onValueChange={setTeam2Id}>
             <SelectTrigger>
               <SelectValue placeholder="Seleccionar Equipo 2" />
             </SelectTrigger>
             <SelectContent>
-              {teams.map(team => (
+              {sortedTeams.map(team => (
                 <SelectItem key={team.id} value={String(team.id)} disabled={team.id === (team1Id ? parseInt(team1Id) : -1)}>
                   {team.name}
                 </SelectItem>
@@ -74,20 +76,20 @@ export function H2hView({ teams }: H2hViewProps) {
           <div className="mt-8">
             <h3 className="text-center text-2xl font-bold mb-6 font-headline">H2H Histórico</h3>
             <div className="flex justify-around items-center text-center">
-              <div className="flex flex-col items-center gap-2">
-                <Image src={team1.logoUrl} alt={team1.name} width={80} height={80} className="rounded-full" data-ai-hint={team1.dataAiHint} />
-                <p className="font-bold text-lg">{team1.name}</p>
+              <div className="flex flex-col items-center gap-2 w-1/3">
+                <Image src={team1.logoUrl} alt={team1.name} width={60} height={60} className="rounded-full sm:w-20 sm:h-20" data-ai-hint={team1.dataAiHint} />
+                <p className="font-bold text-sm sm:text-lg truncate">{team1.name}</p>
               </div>
-              <div className="flex items-center gap-4 text-2xl font-bold">
+              <div className="flex items-center gap-2 sm:gap-4 text-xl sm:text-2xl font-bold">
                 <span className="text-primary">{result.wins}</span>
                 <span>-</span>
                 <span className="text-muted-foreground">{result.draws}</span>
                 <span>-</span>
                 <span className="text-destructive">{result.losses}</span>
               </div>
-              <div className="flex flex-col items-center gap-2">
-                <Image src={team2.logoUrl} alt={team2.name} width={80} height={80} className="rounded-full" data-ai-hint={team2.dataAiHint}/>
-                <p className="font-bold text-lg">{team2.name}</p>
+              <div className="flex flex-col items-center gap-2 w-1/3">
+                <Image src={team2.logoUrl} alt={team2.name} width={60} height={60} className="rounded-full sm:w-20 sm:h-20" data-ai-hint={team2.dataAiHint}/>
+                <p className="font-bold text-sm sm:text-lg truncate">{team2.name}</p>
               </div>
             </div>
              <p className="text-center text-xs text-muted-foreground mt-2">V - E - D</p>

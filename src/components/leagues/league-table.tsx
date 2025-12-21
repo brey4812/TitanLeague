@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "../ui/badge";
 
 interface LeagueTableProps {
   division: Division;
@@ -25,20 +26,20 @@ export function LeagueTable({ division }: LeagueTableProps) {
   });
 
   return (
-    <div id={`league-table-${division.id}`} className="rounded-lg border bg-card text-card-foreground shadow-sm">
+    <div id={`league-table-${division.id}`} className="rounded-lg border bg-card text-card-foreground shadow-sm overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-12 text-center">#</TableHead>
-            <TableHead>Equipo</TableHead>
-            <TableHead className="text-center">PJ</TableHead>
-            <TableHead className="text-center">V</TableHead>
-            <TableHead className="text-center">E</TableHead>
-            <TableHead className="text-center">D</TableHead>
-            <TableHead className="text-center">GF</TableHead>
-            <TableHead className="text-center">GC</TableHead>
-            <TableHead className="text-center">DG</TableHead>
-            <TableHead className="text-center">Pts</TableHead>
+            <TableHead className="w-10 text-center px-2">#</TableHead>
+            <TableHead className="min-w-[150px]">Equipo</TableHead>
+            <TableHead className="text-center px-2">PJ</TableHead>
+            <TableHead className="text-center px-2">V</TableHead>
+            <TableHead className="text-center px-2">E</TableHead>
+            <TableHead className="text-center px-2">D</TableHead>
+            <TableHead className="text-center px-2">GF</TableHead>
+            <TableHead className="text-center px-2">GC</TableHead>
+            <TableHead className="text-center px-2">DG</TableHead>
+            <TableHead className="text-center font-bold px-2">Pts</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -47,9 +48,9 @@ export function LeagueTable({ division }: LeagueTableProps) {
             const goalDifference = team.stats.goalsFor - team.stats.goalsAgainst;
             return (
               <TableRow key={team.id}>
-                <TableCell className="font-medium text-center">{index + 1}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-3">
+                <TableCell className="font-medium text-center px-2">{index + 1}</TableCell>
+                <TableCell className="px-2">
+                  <div className="flex items-center gap-2">
                     <Image
                       src={team.logoUrl}
                       alt={team.name}
@@ -58,17 +59,21 @@ export function LeagueTable({ division }: LeagueTableProps) {
                       className="rounded-full"
                       data-ai-hint={team.dataAiHint}
                     />
-                    <span className="font-medium">{team.name}</span>
+                    <span className="font-medium truncate">{team.name}</span>
                   </div>
                 </TableCell>
-                <TableCell className="text-center">{team.stats.wins + team.stats.draws + team.stats.losses}</TableCell>
-                <TableCell className="text-center">{team.stats.wins}</TableCell>
-                <TableCell className="text-center">{team.stats.draws}</TableCell>
-                <TableCell className="text-center">{team.stats.losses}</TableCell>
-                <TableCell className="text-center">{team.stats.goalsFor}</TableCell>
-                <TableCell className="text-center">{team.stats.goalsAgainst}</TableCell>
-                <TableCell className="text-center">{goalDifference > 0 ? `+${goalDifference}` : goalDifference}</TableCell>
-                <TableCell className="text-center font-bold">{points}</TableCell>
+                <TableCell className="text-center px-2">{team.stats.wins + team.stats.draws + team.stats.losses}</TableCell>
+                <TableCell className="text-center px-2">{team.stats.wins}</TableCell>
+                <TableCell className="text-center px-2">{team.stats.draws}</TableCell>
+                <TableCell className="text-center px-2">{team.stats.losses}</TableCell>
+                <TableCell className="text-center px-2">{team.stats.goalsFor}</TableCell>
+                <TableCell className="text-center px-2">{team.stats.goalsAgainst}</TableCell>
+                <TableCell className="text-center px-2">
+                  <Badge variant={goalDifference > 0 ? "default" : goalDifference < 0 ? "destructive" : "secondary"} className="w-8 justify-center">
+                    {goalDifference > 0 ? `+${goalDifference}` : goalDifference}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-center font-bold px-2">{points}</TableCell>
               </TableRow>
             );
           })}

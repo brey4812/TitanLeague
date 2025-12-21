@@ -32,7 +32,7 @@ export default function DashboardPage() {
         title="Panel de Control"
         description="Bienvenido a la Liga Titán. Aquí tienes un resumen de la temporada actual."
       />
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
         {stats.map((stat) => (
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

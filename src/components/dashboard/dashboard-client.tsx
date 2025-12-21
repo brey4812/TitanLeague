@@ -24,32 +24,30 @@ const MatchCard = ({ match, getTeamById, getPlayerById }: { match: MatchResult, 
     if (!homeTeam || !awayTeam) return null;
 
     return (
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-2 sm:gap-4 flex-1">
-          <Image src={homeTeam.logoUrl} alt={homeTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={homeTeam.dataAiHint} />
-          <span className="font-medium text-right w-20 sm:w-32 truncate">{homeTeam.name}</span>
+      <div className="flex items-center justify-between p-3 border-b">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+          <Image src={homeTeam.logoUrl} alt={homeTeam.name} width={32} height={32} className="rounded-full" data-ai-hint={homeTeam.dataAiHint} />
+          <span className="font-medium text-right truncate text-sm sm:text-base flex-1">{homeTeam.name}</span>
         </div>
-        <div className="text-center font-bold text-lg mx-2 sm:mx-4">
+        <div className="text-center font-bold text-base sm:text-lg mx-2 sm:mx-4">
           <span>{match.homeScore} - {match.awayScore}</span>
         </div>
-        <div className="flex items-center gap-2 sm:gap-4 flex-1">
-          <span className="font-medium text-left w-20 sm:w-32 truncate">{awayTeam.name}</span>
-          <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+          <span className="font-medium text-left truncate text-sm sm:text-base flex-1">{awayTeam.name}</span>
+          <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={32} height={32} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
         </div>
-        <div className="flex flex-col items-center mx-4 w-28 text-center">
+        <div className="flex flex-col items-center ml-2 sm:ml-4 w-20 sm:w-28 text-center">
             {mvp ? (
-                <Badge variant="outline" className="flex items-center gap-1.5">
+                <Badge variant="outline" className="flex items-center gap-1.5 py-0.5 px-1.5 sm:px-2">
                     <Icons.Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                    <span className="font-semibold truncate">{mvp.name}</span>
+                    <span className="font-semibold truncate text-xs">{mvp.name}</span>
                 </Badge>
-            ) : <div className="h-6"/>}
-            {mvp && <span className="text-xs text-muted-foreground mt-1">MVP</span>}
+            ) : <div className="h-5 sm:h-6"/>}
+            {mvp && <span className="text-xs text-muted-foreground mt-0.5 sm:mt-1">MVP</span>}
         </div>
-        <div className="flex flex-col sm:flex-row gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => (document.dispatchEvent(new CustomEvent('showPressNotes', { detail: match })))}>
-                <Icons.Press className="h-5 w-5" />
-            </Button>
-        </div>
+        <Button variant="ghost" size="icon" className="h-8 w-8 ml-1" onClick={() => (document.dispatchEvent(new CustomEvent('showPressNotes', { detail: match })))}>
+            <Icons.Press className="h-4 w-4" />
+        </Button>
       </div>
     );
 };
@@ -220,7 +218,7 @@ export function DashboardClient() {
 
   if (!isLoaded) {
     return (
-        <Card className="lg:col-span-3">
+        <Card>
             <CardHeader><Skeleton className="h-8 w-48" /></CardHeader>
             <CardContent>
                 <div className="space-y-4">
@@ -234,57 +232,66 @@ export function DashboardClient() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-       <Card className="lg:col-span-3">
-        <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <>
+       <Card>
+        <CardHeader className="flex-col items-start gap-4">
           <CardTitle>Resultados</CardTitle>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-              <Button onClick={handleDownloadResults} variant="outline" className="h-10">
-                <Icons.Download className="mr-2"/> Descargar Resultados
-              </Button>
-              <Select value={displayedDivision} onValueChange={setDisplayedDivision}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Seleccionar División" />
-                </SelectTrigger>
-                <SelectContent>
-                  {divisions.map(division => (
-                    <SelectItem key={division.id} value={String(division.id)}>
-                      {division.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="flex items-center gap-2 justify-between">
-                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => Math.max(1, w - 1))}>
-                      <Icons.ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Badge variant="secondary" className="text-sm px-4 py-2 h-10">Jornada {displayedWeek}</Badge>
-                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => w + 1)} disabled={isPending || displayedWeek >= maxWeek}>
-                      <Icons.ChevronRight className="h-4 w-4" />
-                  </Button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={displayedDivision} onValueChange={setDisplayedDivision}>
+                  <SelectTrigger className="w-full sm:w-[180px] h-9">
+                    <SelectValue placeholder="Seleccionar División" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {divisions.map(division => (
+                      <SelectItem key={division.id} value={String(division.id)}>
+                        {division.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center gap-2 justify-between">
+                    <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setDisplayedWeek(w => Math.max(1, w - 1))}>
+                        <Icons.ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Badge variant="secondary" className="text-sm px-3 py-1.5 h-9">Jornada {displayedWeek}</Badge>
+                    <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setDisplayedWeek(w => w + 1)} disabled={isPending || displayedWeek >= maxWeek}>
+                        <Icons.ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
               </div>
-              <Button onClick={handleSimulateMatchday} disabled={isPending} className="h-10">
-                {isPending ? 'Simulando...' : <><Icons.Play className="mr-2"/> Simular Siguiente Jornada</>}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={handleDownloadResults} variant="outline" className="h-9 w-full sm:w-auto">
+                    <Icons.Download className="mr-2 h-4 w-4"/>
+                    <span className="sm:hidden">Descargar</span>
+                    <span className="hidden sm:inline">Descargar Resultados</span>
+                </Button>
+                <Button onClick={handleSimulateMatchday} disabled={isPending} className="h-9 w-full sm:w-auto">
+                  {isPending ? 'Simulando...' : <><Icons.Play className="mr-2 h-4 w-4"/> <span className="sm:hidden">Simular</span> <span className="hidden sm:inline">Simular Jornada</span></>}
+                </Button>
+              </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
             <ScrollArea className="h-[400px]">
+              <div id="results-list">
                 {matchesForDisplayedWeek.length > 0 ? matchesForDisplayedWeek.map((match) => (
                     <MatchCard key={match.id} match={match} getTeamById={getTeamById} getPlayerById={getPlayerById} />
                 )) : (
-                  <div className="flex items-center justify-center h-40 text-muted-foreground">
+                  <div className="flex items-center justify-center h-40 text-muted-foreground p-4 text-center">
                     No hay partidos para esta jornada y división.
                   </div>
                 )}
+              </div>
             </ScrollArea>
         </CardContent>
       </Card>
       
       {/* Hidden container for export */}
       <div className="absolute -z-10 -left-[9999px] top-0">
-        <div ref={resultsExportRef} className="bg-card p-4">
+        <div ref={resultsExportRef} className="bg-card p-4 min-w-[600px]">
             <div className="flex flex-col">
+              <h2 className="text-xl font-bold text-center mb-4 font-headline">Resultados - Jornada {displayedWeek}</h2>
               {matchesForDisplayedWeek.length > 0 ? matchesForDisplayedWeek.map((match) => (
                   <MatchCard key={`export-${match.id}`} match={match} getTeamById={getTeamById} getPlayerById={getPlayerById} />
               )) : (
@@ -336,6 +343,6 @@ export function DashboardClient() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
