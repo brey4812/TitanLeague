@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef, useTransition, useMemo } from "react";
 import Image from "next/image";
 import type { MatchResult, Team, Player } from "@/lib/types";
 import { getTeamById, getAllTeams, getPlayerById } from "@/lib/data";
@@ -48,14 +48,20 @@ const getRandomPlayer = (team: Team): Player | null => {
 
 export function DashboardClient({ recentMatches: initialMatches }: DashboardClientProps) {
   const [isPending, startTransition] = useTransition();
-  const [recentMatches, setRecentMatches] = useState(initialMatches);
+  const [allMatches, setAllMatches] = useState(initialMatches);
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
   const [pressNotes, setPressNotes] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const pressNoteRef = useRef<HTMLDivElement>(null);
 
-  const currentWeek = recentMatches.reduce((max, m) => Math.max(max, m.week), 0);
+  const maxWeek = useMemo(() => allMatches.reduce((max, m) => Math.max(max, m.week), 0), [allMatches]);
+  const [displayedWeek, setDisplayedWeek] = useState(maxWeek);
+
+  const matchesForDisplayedWeek = useMemo(() => {
+    return allMatches.filter(m => m.week === displayedWeek).sort((a,b) => b.id - a.id);
+  }, [allMatches, displayedWeek]);
+
 
   const handleDownloadPressNotes = async () => {
     if (!pressNoteRef.current) return;
@@ -116,9 +122,8 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
         const matchesPerSimulation = 4;
         const existingPairs: [number, number][] = [];
 
-        const latestWeek = recentMatches.reduce((max, m) => Math.max(max, m.week), 0);
-        const newWeek = latestWeek + 1;
-        const latestId = recentMatches.reduce((max, m) => Math.max(max, m.id), 0);
+        const newWeek = maxWeek + 1;
+        const latestId = allMatches.reduce((max, m) => Math.max(max, m.id), 0);
 
         for(let i = 0; i < matchesPerSimulation; i++) {
             const teamPair = getTwoRandomTeams(allTeams, existingPairs);
@@ -149,7 +154,8 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
             }
         }
 
-        setRecentMatches(prevMatches => [...newMatches, ...prevMatches]);
+        setAllMatches(prevMatches => [...prevMatches, ...newMatches]);
+        setDisplayedWeek(newWeek);
         toast({
             title: `Jornada ${newWeek} Simulada`,
             description: "Se han generado nuevos resultados de partidos."
@@ -222,17 +228,29 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
         <CardHeader className="flex-row items-center justify-between">
           <div className="flex items-center gap-4">
             <CardTitle>Resultados Recientes</CardTitle>
-            <Badge variant="secondary">Jornada {currentWeek}</Badge>
+            <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setDisplayedWeek(w => w - 1)} disabled={displayedWeek <= 1}>
+                    <Icons.ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Badge variant="secondary" className="text-sm">Jornada {displayedWeek}</Badge>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setDisplayedWeek(w => w + 1)} disabled={displayedWeek >= maxWeek}>
+                    <Icons.ChevronRight className="h-4 w-4" />
+                </Button>
+            </div>
           </div>
           <Button onClick={handleSimulateMatchday} disabled={isPending}>
-            {isPending ? 'Simulando...' : <><Icons.Play className="mr-2"/> Simular Jornada</>}
+            {isPending ? 'Simulando...' : <><Icons.Play className="mr-2"/> Simular Siguiente Jornada</>}
           </Button>
         </CardHeader>
         <CardContent className="p-0">
             <ScrollArea className="h-[400px]">
-                {recentMatches.map((match) => (
+                {matchesForDisplayedWeek.length > 0 ? matchesForDisplayedWeek.map((match) => (
                     <MatchCard key={match.id} match={match} />
-                ))}
+                )) : (
+                  <div className="flex items-center justify-center h-40 text-muted-foreground">
+                    No hay partidos para esta jornada.
+                  </div>
+                )}
             </ScrollArea>
         </CardContent>
       </Card>

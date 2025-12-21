@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/icons";
-import { getTeamOfTheWeek } from "@/lib/data";
+import { getTeamOfTheWeek, matchResults as allMatches } from "@/lib/data";
 import { TeamOfTheWeekPlayer } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { FootballField } from "./football-field";
+import { useToast } from "@/hooks/use-toast";
 
 interface TeamOfTheWeekViewProps {
     initialWeek: number;
@@ -17,6 +18,10 @@ export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
     const [week, setWeek] = useState(initialWeek);
     const [team, setTeam] = useState<TeamOfTheWeekPlayer[]>([]);
     const fieldRef = useRef<HTMLDivElement>(null);
+    const { toast } = useToast();
+
+    // This should ideally come from a shared state or props
+    const maxSimulatedWeek = allMatches.reduce((max, m) => Math.max(max, m.week), 0);
 
     useEffect(() => {
         setTeam(getTeamOfTheWeek(week));
@@ -31,8 +36,14 @@ export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
     };
 
     const handleNextWeek = () => {
-        // We don't know the max week, so we allow going forward.
-        // The data function will handle providing players.
+        if (week >= maxSimulatedWeek) {
+            toast({
+                title: 'Jornada no disponible',
+                description: 'Aún no se ha simulado esta jornada.',
+                variant: 'destructive',
+            })
+            return;
+        }
         setWeek(w => w + 1);
     };
     
@@ -69,7 +80,7 @@ export function TeamOfTheWeekView({ initialWeek }: TeamOfTheWeekViewProps) {
                         <Icons.ChevronLeft className="h-4 w-4" />
                     </Button>
                     <span className="text-sm font-medium w-24 text-center">Jornada {week}</span>
-                    <Button variant="outline" size="icon" onClick={handleNextWeek}>
+                    <Button variant="outline" size="icon" onClick={handleNextWeek} disabled={week >= maxSimulatedWeek}>
                         <Icons.ChevronRight className="h-4 w-4" />
                     </Button>
                 </div>
