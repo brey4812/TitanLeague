@@ -2,8 +2,8 @@
 
 import { useState, useRef, useTransition, useMemo } from "react";
 import Image from "next/image";
-import type { MatchResult, Team, Player } from "@/lib/types";
-import { getTeamById, getAllTeams, getPlayerById } from "@/lib/data";
+import type { MatchResult, Team, Player, Division } from "@/lib/types";
+import { getTeamById, getAllTeams, getPlayerById, divisions } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -14,26 +14,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 import html2canvas from 'html2canvas';
 import { ScrollArea } from "../ui/scroll-area";
 import { Badge } from "../ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface DashboardClientProps {
   recentMatches: MatchResult[];
 }
 
-// Helper function to get two random distinct teams
+// Helper function to get two random distinct teams from a specific division
 const getTwoRandomTeams = (teams: Team[], existingPairs: [number, number][]): [Team, Team] | null => {
     let team1: Team, team2: Team;
     let attempts = 0;
     
-    // Avoid infinite loops if all pairs are taken
-    if (existingPairs.length >= (teams.length * (teams.length - 1)) / 2) {
-        return null;
-    }
+    const availableTeams = teams.filter(t => !existingPairs.flat().includes(t.id));
+    if (availableTeams.length < 2) return null;
 
     do {
-        team1 = teams[Math.floor(Math.random() * teams.length)];
-        team2 = teams[Math.floor(Math.random() * teams.length)];
+        team1 = availableTeams[Math.floor(Math.random() * availableTeams.length)];
+        team2 = availableTeams[Math.floor(Math.random() * availableTeams.length)];
         attempts++;
-    } while ((team1.id === team2.id || existingPairs.some(p => (p[0] === team1.id && p[1] === team2.id) || (p[0] === team2.id && p[1] === team1.id))) && attempts < 50);
+    } while (team1.id === team2.id && attempts < 50);
 
     if (team1.id === team2.id) return null;
 
@@ -57,10 +56,17 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
 
   const maxWeek = useMemo(() => allMatches.reduce((max, m) => Math.max(max, m.week), 0), [allMatches]);
   const [displayedWeek, setDisplayedWeek] = useState(maxWeek);
+  const [displayedDivision, setDisplayedDivision] = useState<string>(String(divisions[0].id));
 
   const matchesForDisplayedWeek = useMemo(() => {
-    return allMatches.filter(m => m.week === displayedWeek).sort((a,b) => b.id - a.id);
-  }, [allMatches, displayedWeek]);
+    const divisionId = parseInt(displayedDivision);
+    return allMatches
+      .filter(m => {
+        const homeTeam = getTeamById(m.homeTeamId);
+        return m.week === displayedWeek && homeTeam?.division === divisionId;
+      })
+      .sort((a,b) => b.id - a.id);
+  }, [allMatches, displayedWeek, displayedDivision]);
 
 
   const handleDownloadPressNotes = async () => {
@@ -119,29 +125,32 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
     startTransition(() => {
         const allTeams = getAllTeams();
         const newMatches: MatchResult[] = [];
-        const matchesPerSimulation = 4;
-        const existingPairs: [number, number][] = [];
-
         const newWeek = maxWeek + 1;
         const latestId = allMatches.reduce((max, m) => Math.max(max, m.id), 0);
+        let matchCounter = 0;
 
-        for(let i = 0; i < matchesPerSimulation; i++) {
-            const teamPair = getTwoRandomTeams(allTeams, existingPairs);
-            if(teamPair) {
-                const [homeTeam, awayTeam] = teamPair;
-                existingPairs.push([homeTeam.id, awayTeam.id]);
-                
+        divisions.forEach(division => {
+            const teamsInDivision = division.teams;
+            const teamsToPair = [...teamsInDivision];
+            const pairedTeamIds: number[] = [];
+
+            while (pairedTeamIds.length < teamsToPair.length) {
+                const availableTeams = teamsToPair.filter(t => !pairedTeamIds.includes(t.id));
+                if (availableTeams.length < 2) break;
+
+                const team1 = availableTeams[0];
+                const team2 = availableTeams[1];
+                pairedTeamIds.push(team1.id, team2.id);
+
+                const homeTeam = Math.random() > 0.5 ? team1 : team2;
+                const awayTeam = homeTeam.id === team1.id ? team2 : team1;
+
                 let mvpPlayer = null;
-                if(Math.random() > 0.5){
-                  const homePlayer = getRandomPlayer(homeTeam);
-                  mvpPlayer = homePlayer;
-                } else {
-                  const awayPlayer = getRandomPlayer(awayTeam);
-                  mvpPlayer = awayPlayer;
-                }
+                const winningTeam = Math.random() > 0.5 ? homeTeam : awayTeam;
+                mvpPlayer = getRandomPlayer(winningTeam);
                 
                 newMatches.push({
-                    id: latestId + i + 1,
+                    id: latestId + matchCounter + 1,
                     season: 1,
                     week: newWeek,
                     homeTeamId: homeTeam.id,
@@ -151,14 +160,16 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                     isImportant: Math.random() > 0.7,
                     mvpId: mvpPlayer?.id,
                 });
+                matchCounter++;
             }
-        }
+        });
+
 
         setAllMatches(prevMatches => [...prevMatches, ...newMatches]);
         setDisplayedWeek(newWeek);
         toast({
             title: `Jornada ${newWeek} Simulada`,
-            description: "Se han generado nuevos resultados de partidos."
+            description: "Se han generado nuevos resultados de partidos para todas las divisiones."
         })
     });
 };
@@ -225,22 +236,34 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <Card className="lg:col-span-3">
-        <CardHeader className="flex-row items-center justify-between">
-          <div className="flex items-center gap-4">
-            <CardTitle>Resultados Recientes</CardTitle>
-            <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setDisplayedWeek(w => w - 1)} disabled={displayedWeek <= 1}>
-                    <Icons.ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Badge variant="secondary" className="text-sm">Jornada {displayedWeek}</Badge>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setDisplayedWeek(w => w + 1)} disabled={displayedWeek >= maxWeek}>
-                    <Icons.ChevronRight className="h-4 w-4" />
-                </Button>
-            </div>
+        <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <CardTitle>Resultados</CardTitle>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <Select value={displayedDivision} onValueChange={setDisplayedDivision}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Seleccionar División" />
+                </SelectTrigger>
+                <SelectContent>
+                  {divisions.map(division => (
+                    <SelectItem key={division.id} value={String(division.id)}>
+                      {division.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2 justify-between">
+                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => w - 1)} disabled={displayedWeek <= 1}>
+                      <Icons.ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Badge variant="secondary" className="text-sm px-4 py-2 h-10">Jornada {displayedWeek}</Badge>
+                  <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setDisplayedWeek(w => w + 1)} disabled={displayedWeek >= maxWeek}>
+                      <Icons.ChevronRight className="h-4 w-4" />
+                  </Button>
+              </div>
+              <Button onClick={handleSimulateMatchday} disabled={isPending} className="h-10">
+                {isPending ? 'Simulando...' : <><Icons.Play className="mr-2"/> Simular Siguiente Jornada</>}
+              </Button>
           </div>
-          <Button onClick={handleSimulateMatchday} disabled={isPending}>
-            {isPending ? 'Simulando...' : <><Icons.Play className="mr-2"/> Simular Siguiente Jornada</>}
-          </Button>
         </CardHeader>
         <CardContent className="p-0">
             <ScrollArea className="h-[400px]">
@@ -248,7 +271,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                     <MatchCard key={match.id} match={match} />
                 )) : (
                   <div className="flex items-center justify-center h-40 text-muted-foreground">
-                    No hay partidos para esta jornada.
+                    No hay partidos para esta jornada y división.
                   </div>
                 )}
             </ScrollArea>
@@ -297,3 +320,5 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
     </div>
   );
 }
+
+    
