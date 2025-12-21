@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { getAllTeams } from "@/lib/data";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge }a "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 
 export default function TeamsPage() {
   const teams = getAllTeams();
