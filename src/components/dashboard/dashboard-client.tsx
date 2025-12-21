@@ -41,9 +41,10 @@ const getTwoRandomTeams = (teams: Team[], existingPairs: [number, number][]): [T
     return [team1, team2];
 }
 
-const getRandomPlayer = (team: Team) => {
+const getRandomPlayer = (team: Team): Player | null => {
     if (!team || !team.roster || team.roster.length === 0) return null;
-    return team.roster[Math.floor(Math.random() * team.roster.length)];
+    const roster = team.roster;
+    return roster[Math.floor(Math.random() * roster.length)];
 }
 
 export function DashboardClient({ recentMatches: initialMatches }: DashboardClientProps) {
@@ -128,7 +129,18 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                 
                 const homePlayer = getRandomPlayer(homeTeam);
                 const awayPlayer = getRandomPlayer(awayTeam);
-                const mvpId = Math.random() > 0.5 ? homePlayer?.id : awayPlayer?.id;
+                
+                let mvpPlayer = null;
+                if(Math.random() > 0.5){
+                    mvpPlayer = homePlayer;
+                } else {
+                    mvpPlayer = awayPlayer;
+                }
+                
+                // Fallback if one of the players is null
+                if(!mvpPlayer){
+                    mvpPlayer = homePlayer || awayPlayer;
+                }
                 
                 newMatches.push({
                     id: latestId + i + 1,
@@ -139,7 +151,7 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
                     homeScore: Math.floor(Math.random() * 5),
                     awayScore: Math.floor(Math.random() * 5),
                     isImportant: Math.random() > 0.7,
-                    mvpId: mvpId,
+                    mvpId: mvpPlayer?.id,
                 });
             }
         }
@@ -173,13 +185,13 @@ export function DashboardClient({ recentMatches: initialMatches }: DashboardClie
           <span className="font-medium text-left w-20 sm:w-32 truncate">{awayTeam.name}</span>
           <Image src={awayTeam.logoUrl} alt={awayTeam.name} width={40} height={40} className="rounded-full" data-ai-hint={awayTeam.dataAiHint} />
         </div>
-        <div className="flex flex-col items-center mx-4">
-            {mvp && (
+        <div className="flex flex-col items-center mx-4 w-28 text-center">
+            {mvp ? (
                 <Badge variant="outline" className="flex items-center gap-1.5">
                     <Icons.Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                    <span className="font-semibold">{mvp.name}</span>
+                    <span className="font-semibold truncate">{mvp.name}</span>
                 </Badge>
-            )}
+            ) : <div className="h-6"/>}
             <span className="text-xs text-muted-foreground mt-1">MVP</span>
         </div>
         <div className="flex flex-col sm:flex-row gap-1">
