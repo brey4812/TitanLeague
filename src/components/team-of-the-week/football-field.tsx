@@ -12,8 +12,8 @@ interface FootballFieldProps {
 }
 
 const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
-    <div className="relative flex flex-col items-center text-center w-20 md:w-28 group transition-transform duration-300 hover:scale-110">
-      <div className="relative w-12 h-12 md:w-16 md:h-16 drop-shadow-2xl">
+    <div className="flex flex-col items-center text-center w-20 md:w-28 group transition-transform duration-300 hover:scale-110">
+      <div className="w-12 h-12 md:w-16 md:h-16 drop-shadow-2xl">
         <Image
           src={player.teamLogoUrl}
           alt={player.teamName}
@@ -23,11 +23,8 @@ const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
           data-ai-hint={player.teamDataAiHint}
         />
       </div>
-      <div 
-        className="absolute bottom-[-28px] w-full text-center"
-        style={{ transform: 'translateY(-50%)' }}
-      >
-        <span className="block text-xs font-bold text-white truncate w-full bg-black/50 rounded-full px-2 py-0.5 shadow-lg">
+      <div className="mt-1 w-full flex flex-col items-center">
+        <span className="block text-xs font-bold text-white truncate w-full max-w-[90px] bg-black/50 rounded-full px-2 py-0.5 shadow-lg">
           {player.name}
         </span>
         <Badge variant="secondary" className="mt-1 text-xs">
