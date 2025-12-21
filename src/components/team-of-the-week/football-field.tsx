@@ -12,49 +12,51 @@ interface FootballFieldProps {
 }
 
 const PlayerCard = ({ player }: { player: TeamOfTheWeekPlayer }) => (
-    <div className="flex flex-col items-center text-center w-20 md:w-28 group transition-transform duration-300 hover:scale-110">
-      <div className="w-12 h-12 md:w-16 md:h-16 drop-shadow-2xl">
-        <Image
-          src={player.teamLogoUrl}
-          alt={player.teamName}
-          width={64}
-          height={64}
-          className="rounded-full border-2 border-white bg-gray-200 object-cover"
-          data-ai-hint={player.teamDataAiHint}
-        />
-      </div>
-      <div className="mt-1 w-full flex flex-col items-center">
-        <span className="block text-xs font-bold text-white truncate w-full max-w-[90px] bg-black/50 rounded-full px-2 py-0.5 shadow-lg">
-          {player.name}
-        </span>
-        <Badge variant="secondary" className="mt-1 text-xs">
-          {player.position}
-        </Badge>
-      </div>
+  <div className="relative flex flex-col items-center text-center w-20 md:w-24 group transition-transform duration-300 hover:scale-110 drop-shadow-2xl">
+    <div className="relative w-12 h-12 md:w-16 md:h-16">
+      <Image
+        src={player.teamLogoUrl}
+        alt={player.teamName}
+        width={64}
+        height={64}
+        className="rounded-full border-2 border-white bg-gray-200 object-cover"
+        data-ai-hint={player.teamDataAiHint}
+      />
     </div>
-  );
+    <div
+      className="mt-1 w-full flex flex-col items-center justify-center text-white text-xs font-bold"
+    >
+      <span className="block w-full truncate bg-black/50 rounded-full px-2 py-0.5 shadow-lg">
+        {player.name}
+      </span>
+      <Badge variant="secondary" className="mt-1 text-[10px] leading-tight">
+        {player.position}
+      </Badge>
+    </div>
+  </div>
+);
 
 // Positions for a vertical 4-3-3 formation
 // [top, left] percentages for a vertical field
 const formationPositions = {
     goalkeeper: [
-        [90, 50], // GK
+        [92, 50], // GK
     ],
     defenders: [
-        [70, 15], // LB
-        [73, 40], // LCB
-        [73, 60], // RCB
-        [70, 85], // RB
+        [75, 10], // LB
+        [72, 35], // LCB
+        [72, 65], // RCB
+        [75, 90], // RB
     ],
     midfielders: [
-        [48, 25], // LCM
-        [45, 50], // CM
-        [48, 75], // RCM
+        [50, 25], // LCM
+        [48, 50], // CM
+        [50, 75], // RCM
     ],
     forwards: [
-        [22, 20], // LW
-        [20, 50], // ST
-        [22, 80], // RW
+        [15, 15], // LW
+        [12, 50], // ST
+        [15, 85], // RW
     ]
 };
 
@@ -76,7 +78,7 @@ export function FootballField({ formation }: FootballFieldProps) {
   };
 
   return (
-    <div className="relative w-full max-w-lg mx-auto aspect-[2/3] rounded-lg border-4 border-white/30 overflow-hidden shadow-2xl bg-gradient-to-br from-green-500 via-green-600 to-emerald-700">
+    <div className="relative w-full max-w-lg mx-auto aspect-[2/3] rounded-lg border-4 border-white/30 overflow-hidden shadow-2xl bg-gradient-to-br from-green-500 via-green-600 to-emerald-700 p-4">
         {/* Field lines using SVG for crispness and vertical orientation */}
         <svg width="100%" height="100%" viewBox="0 0 200 300" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
             <rect width="200" height="300" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
