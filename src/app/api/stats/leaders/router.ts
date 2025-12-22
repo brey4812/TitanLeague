@@ -14,26 +14,35 @@ export async function GET(req: Request) {
     // 1. Obtener Tabla de Posiciones desde 'standings'
     const { data: standings, error: stError } = await supabase
       .from("standings")
-      .select(`*, teams(name, badge_url)`)
+      .select(`
+        *,
+        teams (id, name, badge_url)
+      `)
       .eq("season_id", seasonId)
       .order("points", { ascending: false })
       .order("goals_for", { ascending: false });
 
     if (stError) throw stError;
 
-    // 2. Obtener Top Goleadores (Pichichi) desde 'players'
-    const { data: pichichi, error: pError } = await supabase
+    // 2. Obtener Top Goleadores desde 'players'
+    const { data: scorers, error: scError } = await supabase
       .from("players")
-      .select(`name, goals, teams(name, badge_url)`)
+      .select(`
+        id, name, position, goals, assists, clean_sheets,
+        teams (id, name, badge_url)
+      `)
       .gt("goals", 0)
       .order("goals", { ascending: false })
-      .limit(5);
+      .limit(10);
 
-    if (pError) throw pError;
+    if (scError) throw scError;
 
     return NextResponse.json({
       ok: true,
-      data: { standings, pichichi }
+      data: {
+        standings: standings || [],
+        topScorers: scorers || []
+      }
     });
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
