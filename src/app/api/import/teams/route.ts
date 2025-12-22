@@ -6,15 +6,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 👇 ESTE ES EL GET (para navegador)
+// 👉 ESTO ES LO NUEVO (NO BORRES NADA MÁS)
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    message: "API import/teams funcionando",
+    message: "API de importación funcionando 🚀",
   });
 }
 
-// 👇 ESTE ES EL POST (para importar equipos)
+// 👉 ESTO YA LO TENÍAS (SE QUEDA IGUAL)
 export async function POST() {
   const apiKey = process.env.THESPORTSDB_API_KEY;
 
