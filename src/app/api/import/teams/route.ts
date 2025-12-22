@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// 🔐 Supabase (SERVICE ROLE → solo en backend)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// ⚽ Ligas europeas
+// Ligas europeas que quieres importar
 const LEAGUES = [
-  { league: "Spanish La Liga", country: "Spain" },
-  { league: "English Premier League", country: "England" },
-  { league: "German Bundesliga", country: "Germany" },
-  { league: "French Ligue 1", country: "France" },
-  { league: "Italian Serie A", country: "Italy" },
-  { league: "Portuguese Primeira Liga", country: "Portugal" },
-  { league: "Dutch Eredivisie", country: "Netherlands" },
+  { name: "Spanish La Liga", query: "Spanish La Liga" },
+  { name: "English Premier League", query: "English Premier League" },
+  { name: "German Bundesliga", query: "German Bundesliga" },
+  { name: "French Ligue 1", query: "French Ligue 1" },
+  { name: "Italian Serie A", query: "Italian Serie A" },
+  { name: "Portuguese Primeira Liga", query: "Portuguese Primeira Liga" },
+  { name: "Dutch Eredivisie", query: "Dutch Eredivisie" },
 ];
 
 export async function GET() {
@@ -23,7 +22,7 @@ export async function GET() {
 
   if (!apiKey) {
     return NextResponse.json(
-      { error: "THESPORTSDB_API_KEY no definida" },
+      { ok: false, error: "Missing THESPORTSDB_API_KEY" },
       { status: 500 }
     );
   }
@@ -32,51 +31,44 @@ export async function GET() {
   let updated = 0;
   const details: any[] = [];
 
-  for (const l of LEAGUES) {
-    const url = `https://www.thesportsdb.com/api/v1/json/${apiKey}/search_all_teams.php?l=${encodeURIComponent(
-      l.league
-    )}`;
-
-    const res = await fetch(url);
-
-    if (!res.ok) {
-      details.push({ league: l.league, error: "Fetch failed" });
-      continue;
-    }
+  for (const league of LEAGUES) {
+    const res = await fetch(
+      `https://www.thesportsdb.com/api/v1/json/${apiKey}/search_all_teams.php?l=${encodeURIComponent(
+        league.query
+      )}`
+    );
 
     const data = await res.json();
 
-    if (!data.teams) {
-      details.push({ league: l.league, error: "No teams found" });
+    if (!data?.teams) {
+      details.push({ league: league.name, teams: 0 });
       continue;
     }
 
-    for (const t of data.teams) {
-      const { data: result, error } = await supabase
-        .from("teams")
-        .upsert(
-          {
-            real_team_name: t.strTeam,
-            logo: t.strTeamBadge,
-          },
-          { onConflict: "real_team_name" }
-        )
-        .select();
+    for (const t of data.teams.slice(0, 10)) {
+      const { error } = await supabase.from("teams").upsert(
+        {
+          name: t.strTeam,              // obligatorio (NO NULL)
+          real_team_name: t.strTeam,    // nombre real
+          external_id: t.idTeam,        // id TheSportsDB
+          badge_url: t.strBadge,        // escudo
+          country: t.strCountry ?? null,
+        },
+        {
+          onConflict: "real_team_name",
+        }
+      );
 
       if (error) {
         details.push({ team: t.strTeam, error: error.message });
       } else {
-        if (result && result.length > 0) {
-          updated++;
-        } else {
-          inserted++;
-        }
+        inserted++; // Supabase decide si es insert o update
       }
     }
 
     details.push({
-      league: l.league,
-      teams: data.teams.length,
+      league: league.name,
+      teams: Math.min(data.teams.length, 10),
     });
   }
 
