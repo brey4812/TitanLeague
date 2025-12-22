@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button"; // Asegúrate de tener el componente Button de shadcn
+import { Download } from "lucide-react"; // Icono de descarga
 
 export default function StatsPage() {
     const [data, setData] = useState<any>(null);
@@ -25,23 +27,85 @@ export default function StatsPage() {
         loadData();
     }, []);
 
+    // FUNCIÓN PARA DESCARGAR CSV
+    const downloadCSV = (type: 'standings' | 'players') => {
+        let csvContent = "";
+        let fileName = "";
+
+        if (type === 'standings') {
+            fileName = "clasificacion_liga_titan.csv";
+            // Cabeceras
+            csvContent = "Pos,Equipo,PJ,PG,PE,PP,GF,GC,DG,PTS\n";
+            // Filas
+            data.standings.forEach((s: any, i: number) => {
+                const row = [
+                    i + 1,
+                    s.teams.name,
+                    s.played,
+                    s.wins,
+                    s.draws,
+                    s.losses,
+                    s.goals_for,
+                    s.goals_against,
+                    s.goals_for - s.goals_against,
+                    s.points
+                ].join(",");
+                csvContent += row + "\n";
+            });
+        } else {
+            fileName = "goleadores_liga_titan.csv";
+            csvContent = "Pos,Jugador,Equipo,Posicion,Goles\n";
+            data.topScorers.forEach((p: any, i: number) => {
+                const row = [
+                    i + 1,
+                    p.name,
+                    p.teams.name,
+                    p.position,
+                    p.goals
+                ].join(",");
+                csvContent += row + "\n";
+            });
+        }
+
+        // Crear el archivo y descargar
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     if (loading) return <div className="p-10 text-center">Cargando Liga Titán...</div>;
 
     return (
         <div className="flex-1 space-y-4 p-8 pt-6">
-            <PageHeader
-                title="Estadísticas e Información"
-                description="Clasificación y rendimiento individual de la temporada."
-            />
+            <div className="flex items-center justify-between">
+                <PageHeader
+                    title="Estadísticas e Información"
+                    description="Clasificación y rendimiento individual de la temporada."
+                />
+            </div>
             
             <Tabs defaultValue="standings" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="standings">Tabla de Posiciones</TabsTrigger>
-                    <TabsTrigger value="players">Líderes Individuales</TabsTrigger>
-                </TabsList>
+                <div className="flex items-center justify-between mb-4">
+                    <TabsList className="grid w-[400px] grid-cols-2">
+                        <TabsTrigger value="standings">Tabla de Posiciones</TabsTrigger>
+                        <TabsTrigger value="players">Líderes Individuales</TabsTrigger>
+                    </TabsList>
+                    
+                    {/* Botones de descarga condicionales */}
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => downloadCSV('standings')}>
+                            <Download className="mr-2 h-4 w-4" /> Exportar Tabla
+                        </Button>
+                    </div>
+                </div>
 
-                {/* CONTENIDO: TABLA DE POSICIONES */}
-                <TabsContent value="standings" className="mt-6">
+                <TabsContent value="standings" className="mt-0">
                     <Card>
                         <Table>
                             <TableHeader>
@@ -71,8 +135,12 @@ export default function StatsPage() {
                     </Card>
                 </TabsContent>
 
-                {/* CONTENIDO: GOLEADORES */}
-                <TabsContent value="players" className="mt-6">
+                <TabsContent value="players" className="mt-0">
+                    <div className="flex justify-end mb-2">
+                         <Button variant="ghost" size="sm" onClick={() => downloadCSV('players')}>
+                            <Download className="mr-2 h-4 w-4" /> Descargar Goleadores
+                        </Button>
+                    </div>
                     <Card>
                         <Table>
                             <TableHeader>
