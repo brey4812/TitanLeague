@@ -16,10 +16,18 @@ export interface Player {
 export interface Team {
   id: number;
   name: string;
-  logoUrl: string;
-  dataAiHint: string;
-  division: number;
-  divisionName: string;
+  country: string;
+  logo?: string;
+  badge_url: string;
+  overall: number;
+  attack: number;
+  midfield: number;
+  defense: number;
+  real_team_name: string;
+  league: string;
+  external_id: string;
+  division_id: number; // Cambiado a obligatorio para evitar errores en las tablas de liga
+  divisionName?: string;
   stats: {
     wins: number;
     draws: number;
@@ -30,14 +38,12 @@ export interface Team {
   roster: Player[];
 }
 
-// Interfaz para el 11 ideal
-export interface TeamOfTheWeekPlayer extends Player {
-  teamName: string;
-  teamLogoUrl: string;
-  teamDataAiHint: string;
+// Nueva interfaz necesaria para el correcto tipado en LeaguesPage
+export interface Division {
+  id: number;
+  name: string;
 }
 
-// Interfaz para los resultados de partidos
 export interface MatchResult {
   id: number;
   season: number;
@@ -50,18 +56,25 @@ export interface MatchResult {
   mvpId?: number;
 }
 
-// Interfaz para las divisiones de la liga
-export interface Division {
-  id: number;
-  name: string;
-  teams: Team[];
+export interface TeamOfTheWeekPlayer extends Player {
+  teamName: string;
+  teamLogoUrl: string;
+  teamDataAiHint: string;
 }
 
-// Para las comparativas directas
-export interface H2HRecord {
-  team1Id: number;
-  team2Id: number;
-  wins: number;
-  draws: number;
-  losses: number;
+export interface LeagueContextType {
+  teams: Team[];
+  divisions: Division[]; // Añadido para que LeaguesPage pueda iterar sobre ellas
+  matches: MatchResult[];
+  players: Player[];
+  isLoaded: boolean;
+  addTeam: (team: Team) => void;
+  deleteTeam: (id: number) => void;
+  updateTeam: (team: Team) => void;
+  getTeamById: (id: number) => Team | undefined;
+  getTeamByPlayerId: (id: number) => Team | undefined;
+  getTeamOfTheWeek: (week: number) => TeamOfTheWeekPlayer[];
+  getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
+  simulateMatchday: () => void;
+  resetLeagueData: () => void;
 }
