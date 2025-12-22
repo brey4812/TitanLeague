@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function GET() {
   const apiKey = process.env.THESPORTSDB_API_KEY;
@@ -9,5 +15,18 @@ export async function GET() {
 
   const data = await res.json();
 
-  return NextResponse.json(data);
+  let updated = 0;
+
+  for (const t of data.teams ?? []) {
+    const { error } = await supabase
+      .from("teams")
+      .update({
+        logo: t.strTeamBadge,
+      })
+      .ilike("name", t.strTeam);
+
+    if (!error) updated++;
+  }
+
+  return NextResponse.json({ updated });
 }
