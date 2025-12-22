@@ -6,17 +6,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 👉 ESTO ES LO NUEVO (NO BORRES NADA MÁS)
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    message: "API de importación funcionando 🚀",
-  });
-}
-
-// 👉 ESTO YA LO TENÍAS (SE QUEDA IGUAL)
-export async function POST() {
   const apiKey = process.env.THESPORTSDB_API_KEY;
+
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "API KEY de TheSportsDB no configurada" },
+      { status: 500 }
+    );
+  }
 
   const res = await fetch(
     `https://www.thesportsdb.com/api/v1/json/${apiKey}/search_all_teams.php?l=English Premier League`
@@ -36,5 +34,8 @@ export async function POST() {
     if (!error) inserted++;
   }
 
-  return NextResponse.json({ inserted });
+  return NextResponse.json({
+    ok: true,
+    inserted,
+  });
 }
