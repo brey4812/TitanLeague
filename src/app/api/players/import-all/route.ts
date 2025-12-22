@@ -6,11 +6,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function POST(req: Request) {
+// Cambiamos POST por GET para que funcione al abrir el link
+export async function GET() {
   try {
     const apiKey = process.env.THESPORTSDB_API_KEY || "1";
 
-    // 1. Obtenemos todos los equipos que ya tienes en tu base de datos (los reales de la API)
+    // 1. Buscamos todos los equipos en tu tabla 'teams' que tengan external_id
     const { data: teams, error: teamsError } = await supabase
       .from("teams")
       .select("id, external_id, name")
@@ -18,13 +19,13 @@ export async function POST(req: Request) {
 
     if (teamsError) throw teamsError;
     if (!teams || teams.length === 0) {
-      return NextResponse.json({ ok: false, error: "No hay equipos con ID de API en tu DB" });
+      return NextResponse.json({ ok: false, error: "No hay equipos con ID de API en tu base de datos" });
     }
 
     let totalImported = 0;
     const report: string[] = [];
 
-    // 2. Por cada equipo, traemos sus jugadores
+    // 2. Recorremos los equipos uno a uno
     for (const team of teams) {
       const res = await fetch(`https://www.thesportsdb.com/api/v1/json/${apiKey}/lookup_all_players.php?id=${team.external_id}`);
       const data = await res.json();
@@ -33,36 +34,34 @@ export async function POST(req: Request) {
         const playersToInsert = data.player.map((p: any) => ({
           name: p.strPlayer,
           position: p.strPosition,
-          team_id: team.id, // Asignación inicial
-          rating: Math.floor(Math.random() * (88 - 74 + 1)) + 74,
+          team_id: team.id, // Se asigna inicialmente, pero es editable
+          rating: Math.floor(Math.random() * (88 - 72 + 1)) + 72,
           goals: 0,
           assists: 0,
           clean_sheets: 0
         }));
 
-        // USAMOS UPSERT POR NOMBRE:
-        // Esto es CLAVE: Si Mbappe ya existe, no se duplica.
-        // Si ya lo moviste al City, el onConflict hará que se mantenga como está 
-        // y no se vuelva a "forzar" al equipo original de la API.
+        // Usamos upsert por 'name' para no duplicar y respetar si ya moviste al jugador
         const { error: upsertError } = await supabase
           .from("players")
           .upsert(playersToInsert, { onConflict: 'name' });
 
         if (!upsertError) {
           totalImported += playersToInsert.length;
-          report.push(`${team.name}: ${playersToInsert.length} jugadores`);
+          report.push(`${team.name}: OK (${playersToInsert.length} jugadores)`);
         }
       }
     }
 
+    // Devolvemos un resumen visual para que lo veas en el navegador
     return NextResponse.json({
       ok: true,
-      message: `Bolsa de jugadores actualizada. Total: ${totalImported} jugadores reales.`,
-      summary: report
+      mensaje: "¡Bolsa de jugadores actualizada con éxito!",
+      total_jugadores: totalImported,
+      resumen: report
     });
 
   } catch (err: any) {
-    console.error(err);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }
