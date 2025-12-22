@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     if (teamsError) throw teamsError;
 
     let totalImported = 0;
-    const report = [];
+    const report: string[] = [];
 
     // 2. Recorremos los equipos para traer a los jugadores
     for (const team of teams || []) {
@@ -30,19 +30,19 @@ export async function POST(req: Request) {
         const playersToInsert = data.player.map((p: any) => ({
           name: p.strPlayer,
           position: p.strPosition,
-          team_id: team.id, // Asignación inicial
+          team_id: team.id, // Asignación inicial (luego puedes cambiarlo)
           rating: Math.floor(Math.random() * (88 - 72 + 1)) + 72,
           goals: 0,
           assists: 0,
           clean_sheets: 0
         }));
 
-        // INSERTAR USANDO ON CONFLICT DO NOTHING
-        // Si el nombre del jugador ya existe, no hace nada. 
+        // INSERTAR USANDO ON CONFLICT
+        // Si el nombre del jugador ya existe, lo ignora. 
         // Esto permite que si moviste a Mbappé al City, el script no lo devuelva al Madrid.
         const { error: upsertError } = await supabase
           .from("players")
-          .upsert(playersToInsert, { onConflict: 'name', ignoreDuplicates: true });
+          .upsert(playersToInsert, { onConflict: 'name' });
 
         if (!upsertError) {
           totalImported += playersToInsert.length;
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: `Importación finalizada. ${totalImported} nuevos jugadores en la bolsa.`,
+      message: `Importación finalizada. ${totalImported} jugadores en la base de datos.`,
       report
     });
 
