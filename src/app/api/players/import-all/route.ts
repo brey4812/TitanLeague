@@ -6,12 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Cambiamos POST por GET para que funcione al abrir el link
 export async function GET() {
   try {
     const apiKey = process.env.THESPORTSDB_API_KEY || "1";
 
-    // 1. Buscamos todos los equipos en tu tabla 'teams' que tengan external_id
     const { data: teams, error: teamsError } = await supabase
       .from("teams")
       .select("id, external_id, name")
@@ -19,49 +17,61 @@ export async function GET() {
 
     if (teamsError) throw teamsError;
     if (!teams || teams.length === 0) {
-      return NextResponse.json({ ok: false, error: "No hay equipos con ID de API en tu base de datos" });
+      return NextResponse.json({
+        ok: false,
+        error: "No hay equipos con ID externo"
+      });
     }
 
     let totalImported = 0;
     const report: string[] = [];
 
-    // 2. Recorremos los equipos uno a uno
     for (const team of teams) {
-      const res = await fetch(`https://www.thesportsdb.com/api/v1/json/${apiKey}/lookup_all_players.php?id=${team.external_id}`);
+      const res = await fetch(
+        `https://www.thesportsdb.com/api/v1/json/${apiKey}/lookup_all_players.php?id=${team.external_id}`
+      );
+
       const data = await res.json();
 
-      if (data && data.player) {
-        const playersToInsert = data.player.map((p: any) => ({
-          name: p.strPlayer,
-          position: p.strPosition,
-          team_id: team.id, // Se asigna inicialmente, pero es editable
-          rating: Math.floor(Math.random() * (88 - 72 + 1)) + 72,
-          goals: 0,
-          assists: 0,
-          clean_sheets: 0
-        }));
+      if (!data?.player) {
+        report.push(`${team.name}: sin jugadores`);
+        continue;
+      }
 
-        // Usamos upsert por 'name' para no duplicar y respetar si ya moviste al jugador
-        const { error: upsertError } = await supabase
-          .from("players")
-          .upsert(playersToInsert, { onConflict: 'name' });
+      const playersToInsert = data.player.map((p: any) => ({
+        external_id: p.idPlayer,
+        name: p.strPlayer,
+        position: p.strPosition,
+        team_id: team.id,
+        rating: Math.floor(Math.random() * (88 - 72 + 1)) + 72,
+        goals: 0,
+        assists: 0,
+        clean_sheets: 0
+      }));
 
-        if (!upsertError) {
-          totalImported += playersToInsert.length;
-          report.push(`${team.name}: OK (${playersToInsert.length} jugadores)`);
-        }
+      const { error: upsertError } = await supabase
+        .from("players")
+        .upsert(playersToInsert, { onConflict: "external_id" });
+
+      if (upsertError) {
+        report.push(`${team.name}: ERROR`);
+      } else {
+        totalImported += playersToInsert.length;
+        report.push(`${team.name}: OK (${playersToInsert.length})`);
       }
     }
 
-    // Devolvemos un resumen visual para que lo veas en el navegador
     return NextResponse.json({
       ok: true,
-      mensaje: "¡Bolsa de jugadores actualizada con éxito!",
+      mensaje: "Jugadores importados correctamente",
       total_jugadores: totalImported,
       resumen: report
     });
 
   } catch (err: any) {
-    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: err.message },
+      { status: 500 }
+    );
   }
 }
