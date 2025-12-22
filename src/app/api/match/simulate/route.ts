@@ -3,19 +3,21 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // IMPORTANTE: service role
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function randomBetween(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
+function normalizeTeam(team: any) {
+  const attack = team.attack ?? 70;
+  const midfield = team.midfield ?? 70;
+  const defense = team.defense ?? 70;
 
-function calculateGoals(strengthDiff: number) {
-  if (strengthDiff > 20) return randomBetween(2, 4);
-  if (strengthDiff > 10) return randomBetween(1, 3);
-  if (strengthDiff > -10) return randomBetween(0, 2);
-  if (strengthDiff > -20) return randomBetween(0, 1);
-  return randomBetween(0, 1);
+  return {
+    ...team,
+    attack,
+    midfield,
+    defense,
+    overall: Math.round((attack + midfield + defense) / 3),
+  };
 }
 
 export async function POST(req: Request) {
@@ -29,58 +31,68 @@ export async function POST(req: Request) {
       );
     }
 
-    // Obtener equipos
-    const { data: teams, error } = await supabase
+    // 🔹 HOME TEAM
+    const { data: homeTeams, error: homeError } = await supabase
       .from("teams")
-      .select("id, name, rating")
-      .in("id", [homeTeamId, awayTeamId]);
+      .select("*")
+      .eq("id", homeTeamId)
+      .limit(1);
 
-    if (error || !teams || teams.length !== 2) {
+    // 🔹 AWAY TEAM
+    const { data: awayTeams, error: awayError } = await supabase
+      .from("teams")
+      .select("*")
+      .eq("id", awayTeamId)
+      .limit(1);
+
+    if (homeError || awayError || !homeTeams?.length || !awayTeams?.length) {
       return NextResponse.json(
-        { ok: false, error: "No se pudieron obtener los equipos" },
+        {
+          ok: false,
+          error: "No se pudieron obtener los equipos",
+          debug: {
+            homeError,
+            awayError,
+            homeFound: homeTeams?.length,
+            awayFound: awayTeams?.length,
+          },
+        },
         { status: 500 }
       );
     }
 
-    const home = teams.find(t => t.id === homeTeamId)!;
-    const away = teams.find(t => t.id === awayTeamId)!;
+    const home = normalizeTeam(homeTeams[0]);
+    const away = normalizeTeam(awayTeams[0]);
 
-    // Factores
-    const homeForm = randomBetween(0, 10);
-    const awayForm = randomBetween(0, 10);
-    const randomnessHome = randomBetween(0, 15);
-    const randomnessAway = randomBetween(0, 15);
+    // ⚽ SIMULACIÓN BALANCEADA
+    const homePower = home.overall * 1.08;
+    const awayPower = away.overall;
 
-    const homeStrength =
-      home.rating * 0.6 + homeForm * 0.25 + randomnessHome + 5; // ventaja local
-    const awayStrength =
-      away.rating * 0.6 + awayForm * 0.25 + randomnessAway;
+    const randomness = Math.random() * 20 - 10;
 
-    const diff = homeStrength - awayStrength;
+    const homeGoals = Math.max(
+      0,
+      Math.round((homePower - awayPower + randomness) / 20 + Math.random() * 2)
+    );
 
-    const homeGoals = calculateGoals(diff);
-    const awayGoals = calculateGoals(-diff);
-
-    let winner = "draw";
-    if (homeGoals > awayGoals) winner = home.name;
-    if (awayGoals > homeGoals) winner = away.name;
+    const awayGoals = Math.max(
+      0,
+      Math.round((awayPower - homePower - randomness) / 20 + Math.random() * 2)
+    );
 
     return NextResponse.json({
       ok: true,
-      match: {
-        home: home.name,
-        away: away.name,
-        score: `${homeGoals} - ${awayGoals}`,
-        winner
+      homeTeam: home.name,
+      awayTeam: away.name,
+      score: `${homeGoals} - ${awayGoals}`,
+      stats: {
+        homeOverall: home.overall,
+        awayOverall: away.overall,
       },
-      debug: {
-        homeStrength,
-        awayStrength
-      }
     });
-  } catch (err) {
+  } catch (err: any) {
     return NextResponse.json(
-      { ok: false, error: "Error interno" },
+      { ok: false, error: err.message },
       { status: 500 }
     );
   }
