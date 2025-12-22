@@ -1,14 +1,22 @@
+/**
+ * src/lib/types.ts
+ * Definición central de interfaces para la Liga Titán
+ */
+
 export interface Player {
   id: number;
   name: string;
   nationality: string;
   position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward';
-  rating: number;
+  rating: number; 
   stats: {
     goals: number;
     assists: number;
     cleanSheets: number;
-    cards: { yellow: number; red: number };
+    cards: { 
+      yellow: number; 
+      red: number 
+    };
     mvp: number;
   };
 }
@@ -26,7 +34,7 @@ export interface Team {
   real_team_name: string;
   league: string;
   external_id: string;
-  division_id: number; // Cambiado a obligatorio para evitar errores en las tablas de liga
+  division_id: number;
   divisionName?: string;
   stats: {
     wins: number;
@@ -38,10 +46,21 @@ export interface Team {
   roster: Player[];
 }
 
-// Nueva interfaz necesaria para el correcto tipado en LeaguesPage
 export interface Division {
   id: number;
   name: string;
+}
+
+/**
+ * Eventos detallados para el Panel de Control
+ */
+export interface MatchEvent {
+  id: number;
+  playerId: number;
+  playerName: string;
+  teamId: number;
+  type: 'goal' | 'yellow' | 'red';
+  minute: number;
 }
 
 export interface MatchResult {
@@ -54,6 +73,7 @@ export interface MatchResult {
   awayScore: number;
   isImportant: boolean;
   mvpId?: number;
+  events?: MatchEvent[]; // Para ver goles y tarjetas al hacer click
 }
 
 export interface TeamOfTheWeekPlayer extends Player {
@@ -62,9 +82,12 @@ export interface TeamOfTheWeekPlayer extends Player {
   teamDataAiHint: string;
 }
 
+/**
+ * Contrato del Contexto de la Liga
+ */
 export interface LeagueContextType {
   teams: Team[];
-  divisions: Division[]; // Añadido para que LeaguesPage pueda iterar sobre ellas
+  divisions: Division[];
   matches: MatchResult[];
   players: Player[];
   isLoaded: boolean;
@@ -72,9 +95,10 @@ export interface LeagueContextType {
   deleteTeam: (id: number) => void;
   updateTeam: (team: Team) => void;
   getTeamById: (id: number) => Team | undefined;
-  getTeamByPlayerId: (id: number) => Team | undefined;
+  getPlayerById: (id: number) => Player | undefined;
+  getTeamByPlayerId: (playerId: number) => Team | undefined;
+  simulateMatchday: () => void;
   getTeamOfTheWeek: (week: number) => TeamOfTheWeekPlayer[];
   getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
-  simulateMatchday: () => void;
   resetLeagueData: () => void;
 }

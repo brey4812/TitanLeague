@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useState, ReactNode, useCallback, useEffect } from "react";
-import { Team, Player, MatchResult, TeamOfTheWeekPlayer, Division, LeagueContextType } from "@/lib/types";
+import { Team, Player, MatchResult, MatchEvent, TeamOfTheWeekPlayer, Division, LeagueContextType } from "@/lib/types";
+import { produce } from "immer";
 
 export const LeagueContext = createContext<LeagueContextType>({} as LeagueContextType);
 
@@ -10,7 +11,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Divisiones estáticas de la liga
   const divisions: Division[] = [
     { id: 1, name: "Primera División" },
     { id: 2, name: "Segunda División" },
@@ -18,6 +18,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     { id: 4, name: "Cuarta División" }
   ];
 
+  // --- CARGA Y PERSISTENCIA ---
   useEffect(() => {
     const savedTeams = localStorage.getItem('league_teams');
     const savedMatches = localStorage.getItem('league_matches');
@@ -33,8 +34,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, matches, isLoaded]);
 
+  // --- ACCIONES DE EQUIPO ---
   const addTeam = useCallback((newTeam: Team) => {
-    setTeams(prev => [...prev, newTeam]);
+    setTeams(prev => {
+      if (prev.find(t => t.id === newTeam.id)) return prev;
+      return [...prev, newTeam];
+    });
   }, []);
 
   const deleteTeam = useCallback((id: number) => {
@@ -46,8 +51,53 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     setTeams(prev => prev.map(t => t.id === updated.id ? updated : t));
   }, []);
 
+  // --- BÚSQUEDAS ---
   const getTeamById = (id: number) => teams.find(t => t.id === id);
+  const getPlayerById = (id: number) => teams.flatMap(t => t.roster).find(p => p.id === id);
   const getTeamByPlayerId = (pid: number) => teams.find(t => t.roster.some(p => p.id === pid));
+
+  // --- SIMULACIÓN Y SANCIONES ---
+  const simulateMatchday = useCallback(() => {
+    setMatches(currentMatches => {
+      const nextWeek = currentMatches.length > 0 ? Math.max(...currentMatches.map(m => m.week)) + 1 : 1;
+      
+      // Lógica de Sanciones: Jugadores que se pierden esta jornada
+      const suspendedPlayerIds = new Set<number>();
+      
+      // Buscamos en la jornada anterior (nextWeek - 1)
+      const lastWeekMatches = currentMatches.filter(m => m.week === nextWeek - 1);
+      lastWeekMatches.forEach(m => {
+        m.events?.forEach(e => {
+          if (e.type === 'red') suspendedPlayerIds.add(e.playerId);
+          
+          // Sanción por 2 amarillas en el mismo partido
+          const yellowCardsInMatch = m.events?.filter(ev => ev.playerId === e.playerId && ev.type === 'yellow');
+          if (yellowCardsInMatch && yellowCardsInMatch.length >= 2) {
+            suspendedPlayerIds.add(e.playerId);
+          }
+        });
+      });
+
+      // Simulación básica de ejemplo para generar eventos
+      const newMatches: MatchResult[] = [];
+      // Aquí iterarías sobre tus enfrentamientos...
+      
+      return [...currentMatches, ...newMatches];
+    });
+  }, [teams]);
+
+  // --- ESTADÍSTICAS IDEALES ---
+  const getBestEleven = useCallback((type: string, val?: number): TeamOfTheWeekPlayer[] => {
+    return []; // Implementar lógica de filtrado por rating y posición
+  }, []);
+
+  const getTeamOfTheWeek = (week: number) => getBestEleven("week", week);
+
+  const resetLeagueData = () => {
+    localStorage.removeItem('league_teams');
+    localStorage.removeItem('league_matches');
+    window.location.reload();
+  };
 
   return (
     <LeagueContext.Provider value={{
@@ -60,14 +110,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       deleteTeam,
       updateTeam,
       getTeamById,
+      getPlayerById,
       getTeamByPlayerId,
-      getTeamOfTheWeek: () => [],
-      getBestEleven: () => [],
-      simulateMatchday: () => {},
-      resetLeagueData: () => {
-        localStorage.clear();
-        window.location.reload();
-      }
+      simulateMatchday,
+      getTeamOfTheWeek,
+      getBestEleven,
+      resetLeagueData
     }}>
       {children}
     </LeagueContext.Provider>

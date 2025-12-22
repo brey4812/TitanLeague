@@ -6,46 +6,54 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { Icons } from "@/components/icons";
 import { LeagueContext } from '@/context/league-context';
+import { Trophy, Users, Calendar, Goal } from "lucide-react";
 
 export default function DashboardPage() {
   const { teams, players, matches, isLoaded } = useContext(LeagueContext);
 
   if (!isLoaded) {
-    return <div>Cargando...</div>;
+    return (
+      <div className="flex h-[60vh] items-center justify-center font-bold animate-pulse text-muted-foreground italic">
+        Cargando Panel de Control Titán...
+      </div>
+    );
   }
   
   const totalTeams = teams.length;
   const totalPlayers = players.length;
-  const totalGoals = players.reduce((sum, player) => sum + player.stats.goals, 0);
-  const currentWeek = matches.reduce((max, m) => Math.max(max, m.week), 0);
+  // Calculamos los goles totales sumando los golesFor de cada equipo en la liga
+  const totalGoals = teams.reduce((sum, team) => sum + (team.stats.goalsFor || 0), 0);
+  const currentWeek = matches.length > 0 ? Math.max(...matches.map(m => m.week)) : 0;
 
   const stats = [
-    { title: "Equipos Totales", value: totalTeams, icon: <Icons.Teams className="h-6 w-6 text-muted-foreground" /> },
-    { title: "Jugadores Totales", value: totalPlayers, icon: <Icons.Users className="h-6 w-6 text-muted-foreground" /> },
-    { title: "Jornada Actual", value: currentWeek, icon: <Icons.Calendar className="h-6 w-6 text-muted-foreground" /> },
-    { title: "Goles Totales", value: totalGoals, icon: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-goal h-6 w-6 text-muted-foreground"><path d="M12 13V2l8 4-8 4"/><path d="M12 2L4 6l8 4"/><path d="M12 13v8"/><path d="M17 15.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/><path d="M12 13h-8"/><path d="M12 13h8"/></svg> },
+    { title: "Equipos Totales", value: totalTeams, icon: <Trophy className="h-5 w-5 text-blue-600" /> },
+    { title: "Jugadores Totales", value: totalPlayers, icon: <Users className="h-5 w-5 text-green-600" /> },
+    { title: "Jornada Actual", value: currentWeek, icon: <Calendar className="h-5 w-5 text-purple-600" /> },
+    { title: "Goles Totales", value: totalGoals, icon: <Goal className="h-5 w-5 text-red-600" /> },
   ];
 
   return (
-    <>
+    <div className="container mx-auto py-6 space-y-8">
       <PageHeader
         title="Panel de Control"
-        description="Bienvenido a la Liga Titán. Aquí tienes un resumen de la temporada actual."
+        description="Bienvenido a la Liga Titán. Resumen en tiempo real de tu base de datos y competición."
       />
+      
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
         {stats.map((stat) => (
-          <Card key={stat.title}>
+          <Card key={stat.title} className="shadow-sm border-2">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+              <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{stat.title}</CardTitle>
               {stat.icon}
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+              <div className="text-3xl font-black">{stat.value}</div>
             </CardContent>
           </Card>
         ))}
       </div>
+      
       <DashboardClient />
-    </>
+    </div>
   );
 }
