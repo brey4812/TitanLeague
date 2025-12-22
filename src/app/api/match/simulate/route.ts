@@ -6,93 +6,105 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function normalizeTeam(team: any) {
-  const attack = team.attack ?? 70;
-  const midfield = team.midfield ?? 70;
-  const defense = team.defense ?? 70;
+// utilidades
+function rand(min: number, max: number) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
-  return {
-    ...team,
-    attack,
-    midfield,
-    defense,
-    overall: Math.round((attack + midfield + defense) / 3),
-  };
+function poisson(lambda: number) {
+  let L = Math.exp(-lambda);
+  let k = 0;
+  let p = 1;
+  do {
+    k++;
+    p *= Math.random();
+  } while (p > L);
+  return k - 1;
 }
 
 export async function POST(req: Request) {
   try {
-    const { homeTeamId, awayTeamId } = await req.json();
+    const { leagueId, round } = await req.json();
 
-    if (!homeTeamId || !awayTeamId) {
+    if (!leagueId || !round) {
       return NextResponse.json(
-        { ok: false, error: "Faltan IDs de equipos" },
+        { ok: false, error: "leagueId y round son obligatorios" },
         { status: 400 }
       );
     }
 
-    // 🔹 HOME TEAM
-    const { data: homeTeams, error: homeError } = await supabase
-      .from("teams")
-      .select("*")
-      .eq("id", homeTeamId)
-      .limit(1);
+    // 1️⃣ obtener partidos de esa jornada
+    const { data: matches, error: matchError } = await supabase
+      .from("matches")
+      .select("id, home_team_id, away_team_id")
+      .eq("league_id", leagueId)
+      .eq("round", round)
+      .eq("played", false);
 
-    // 🔹 AWAY TEAM
-    const { data: awayTeams, error: awayError } = await supabase
-      .from("teams")
-      .select("*")
-      .eq("id", awayTeamId)
-      .limit(1);
-
-    if (homeError || awayError || !homeTeams?.length || !awayTeams?.length) {
+    if (matchError || !matches || matches.length === 0) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "No se pudieron obtener los equipos",
-          debug: {
-            homeError,
-            awayError,
-            homeFound: homeTeams?.length,
-            awayFound: awayTeams?.length,
-          },
-        },
-        { status: 500 }
+        { ok: false, error: "No hay partidos para simular" },
+        { status: 404 }
       );
     }
 
-    const home = normalizeTeam(homeTeams[0]);
-    const away = normalizeTeam(awayTeams[0]);
+    let simulated = 0;
 
-    // ⚽ SIMULACIÓN BALANCEADA
-    const homePower = home.overall * 1.08;
-    const awayPower = away.overall;
+    for (const match of matches) {
+      // 2️⃣ obtener equipos
+      const { data: teams } = await supabase
+        .from("teams")
+        .select("id, attack, defense, overall")
+        .in("id", [match.home_team_id, match.away_team_id]);
 
-    const randomness = Math.random() * 20 - 10;
+      if (!teams || teams.length !== 2) continue;
 
-    const homeGoals = Math.max(
-      0,
-      Math.round((homePower - awayPower + randomness) / 20 + Math.random() * 2)
-    );
+      const home = teams.find(t => t.id === match.home_team_id)!;
+      const away = teams.find(t => t.id === match.away_team_id)!;
 
-    const awayGoals = Math.max(
-      0,
-      Math.round((awayPower - homePower - randomness) / 20 + Math.random() * 2)
-    );
+      // 3️⃣ balance realista
+      const homeAdvantage = 1.1;
+
+      const homeLambda =
+        ((home.attack + home.overall) / 2 -
+          away.defense * 0.7) / 30 * homeAdvantage;
+
+      const awayLambda =
+        ((away.attack + away.overall) / 2 -
+          home.defense * 0.7) / 32;
+
+      let homeGoals = Math.max(0, poisson(Math.max(0.2, homeLambda)));
+      let awayGoals = Math.max(0, poisson(Math.max(0.2, awayLambda)));
+
+      // 4️⃣ azar controlado (sorpresas)
+      if (Math.random() < 0.15) {
+        homeGoals += rand(0, 2);
+      }
+      if (Math.random() < 0.15) {
+        awayGoals += rand(0, 2);
+      }
+
+      // 5️⃣ guardar resultado
+      await supabase
+        .from("matches")
+        .update({
+          home_goals: homeGoals,
+          away_goals: awayGoals,
+          played: true
+        })
+        .eq("id", match.id);
+
+      simulated++;
+    }
 
     return NextResponse.json({
       ok: true,
-      homeTeam: home.name,
-      awayTeam: away.name,
-      score: `${homeGoals} - ${awayGoals}`,
-      stats: {
-        homeOverall: home.overall,
-        awayOverall: away.overall,
-      },
+      simulated
     });
-  } catch (err: any) {
+  } catch (err) {
+    console.error(err);
     return NextResponse.json(
-      { ok: false, error: err.message },
+      { ok: false, error: "Error interno del servidor" },
       { status: 500 }
     );
   }
