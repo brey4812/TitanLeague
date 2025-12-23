@@ -55,7 +55,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- LÓGICA CORREGIDA: GENERACIÓN DE DUELOS ---
+  // --- LÓGICA CORREGIDA: GENERACIÓN DE DUELOS (Nombres de columna home_team y away_team) ---
   const autoMatchmaker = useCallback(async () => {
     if (teams.length < 2) return;
 
@@ -69,18 +69,19 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         const teamA = readyTeams[readyTeams.length - 2];
         const teamB = readyTeams[readyTeams.length - 1];
 
-        // CORRECCIÓN: Usamos el mismo nombre de variable aquí y en el IF
+        // CORRECCIÓN: Usamos 'home_team' y 'away_team' según tu base de datos
         const alreadyMatched = matches.some((m: any) => 
-          (String(m.home_team_id) === String(teamA.id) && String(m.away_team_id) === String(teamB.id)) ||
-          (String(m.home_team_id) === String(teamB.id) && String(m.away_team_id) === String(teamA.id))
+          (String(m.home_team) === String(teamA.id) && String(m.away_team) === String(teamB.id)) ||
+          (String(m.home_team) === String(teamB.id) && String(m.away_team) === String(teamA.id))
         );
 
         if (!alreadyMatched) {
           console.log(`Generando duelo: ${teamA.name} vs ${teamB.name}`);
           
+          // CORRECCIÓN: Mapeo exacto a las columnas de Supabase
           const { data, error } = await supabase.from('matches').insert({
-            home_team_id: teamA.id,
-            away_team_id: teamB.id,
+            home_team: teamA.id, 
+            away_team: teamB.id,
             round: 1,
             played: false,
             division_id: div.id,
@@ -116,9 +117,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteTeam = useCallback((id: number | string) => {
     setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
+    // CORRECCIÓN: Filtro de partidos usando nombres de columna correctos
     setMatches(prev => prev.filter(m => 
-      String(m.home_team_id) !== String(id) && 
-      String(m.away_team_id) !== String(id)
+      String(m.home_team) !== String(id) && 
+      String(m.away_team) !== String(id)
     ));
     toast.success("Equipo quitado de la liga");
   }, []);

@@ -61,14 +61,14 @@ export interface MatchResult {
   id: number | string;
   season: number;
   week: number;
-  // --- PROPIEDADES PARA COMPATIBILIDAD CON SUPABASE ---
-  round?: number;           // Coincide con tu columna 'round' en DB
-  home_team_id?: any;       // ID del equipo local en DB
-  away_team_id?: any;       // ID del equipo visitante en DB
-  home_goals?: number;      // Goles local en DB
-  away_goals?: number;      // Goles visitante en DB
-  played?: boolean;         // Estado del partido en DB
-  division_id?: number;     // ID de división en DB
+  // --- PROPIEDADES CORREGIDAS PARA COMPATIBILIDAD CON SUPABASE ---
+  round?: number;
+  home_team?: any;           // Corregido: Coincide con tu columna en DB
+  away_team?: any;           // Corregido: Coincide con tu columna en DB
+  home_goals?: number;
+  away_goals?: number;
+  played?: boolean;
+  division_id?: number;
   // --- PROPIEDADES FRONTEND ---
   homeTeamId: number | string;
   awayTeamId: number | string;
@@ -105,5 +105,5 @@ export interface LeagueContextType {
   resetLeagueData: () => void;
   importLeagueData: (newData: any) => boolean;
   // --- FUNCIÓN DE SINCRONIZACIÓN ---
-  refreshData: () => Promise<void>; // Definición necesaria para evitar errores en Dashboard
+  refreshData: () => Promise<void>;
 }
