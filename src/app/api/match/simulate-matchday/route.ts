@@ -17,16 +17,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Buscamos partidos y obtenemos la plantilla (roster) de los equipos
-    // Usamos el 'select' con joins para traer los jugadores de cada equipo directamente
+    // 1. Buscamos los jugadores vinculados a los equipos de los partidos
+    // Usamos 'players!home_team' para decirle a Supabase que use la FK de home_team para buscar jugadores
     const { data: matches, error: fetchError } = await supabase
       .from("matches")
       .select(`
         id,
         home_team,
         away_team,
-        home:home_team ( roster ),
-        away:away_team ( roster )
+        home_players:players!home_team ( id ),
+        away_players:players!away_team ( id )
       `)
       .eq("division_id", divisionId)
       .eq("round", week)
@@ -56,8 +56,8 @@ export async function POST(req: Request) {
       // 3. Generar Sucesos (Goles) para la tabla match_events
       const events: any[] = [];
       
-      // Goles Locales
-      const homeRoster = (match.home as any)?.roster || [];
+      // Goles Locales (usando home_players)
+      const homeRoster = (match as any).home_players || [];
       for (let i = 0; i < homeGoals; i++) {
         if (homeRoster.length > 0) {
           const scorer = homeRoster[Math.floor(Math.random() * homeRoster.length)];
@@ -70,8 +70,8 @@ export async function POST(req: Request) {
         }
       }
 
-      // Goles Visitantes
-      const awayRoster = (match.away as any)?.roster || [];
+      // Goles Visitantes (usando away_players)
+      const awayRoster = (match as any).away_players || [];
       for (let i = 0; i < awayGoals; i++) {
         if (awayRoster.length > 0) {
           const scorer = awayRoster[Math.floor(Math.random() * awayRoster.length)];
