@@ -41,6 +41,7 @@ export interface Team {
     goalsAgainst: number;
   };
   roster: Player[];
+  points?: number; // Añadido para facilitar ordenamiento
 }
 
 export interface Division {
@@ -50,11 +51,11 @@ export interface Division {
 
 export interface MatchEvent {
   id: number;
-  match_id: number | string; // Añadido para vincular con el partido
-  player_id: number | string; // Cambiado a player_id para coincidir con tu DB
+  match_id: number | string;
+  player_id: number | string;
   playerName?: string;
-  team_id?: number | string; // Cambiado a team_id
-  type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST'; // Tipos normalizados
+  team_id?: number | string;
+  type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST';
   minute: number;
 }
 
@@ -69,6 +70,7 @@ export interface MatchResult {
   round?: number; 
   played: boolean; 
   division_id: number;
+  competition?: string; // Para distinguir entre "League", "The Titan Peak", etc.
   homeTeamId?: number | string;
   awayTeamId?: number | string;
   homeScore?: number;
@@ -88,7 +90,7 @@ export interface LeagueContextType {
   teams: Team[];
   divisions: Division[];
   matches: MatchResult[];
-  matchEvents: MatchEvent[]; // CORRECCIÓN: Añadido al contexto
+  matchEvents: MatchEvent[];
   players: Player[];
   isLoaded: boolean;
   addTeam: (team: Team) => void;
@@ -100,9 +102,15 @@ export interface LeagueContextType {
   getPlayerById: (id: number | string) => Player | undefined;
   getTeamByPlayerId: (playerId: number | string) => Team | undefined;
   simulateMatchday: () => void;
-  getMatchEvents: (matchId: string | number) => MatchEvent[]; // CORRECCIÓN: Añadido
+  getMatchEvents: (matchId: string | number) => MatchEvent[];
   getTeamOfTheWeek: (week: number) => TeamOfTheWeekPlayer[];
   getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
+  
+  // --- NUEVAS FUNCIONES PARA COPAS Y PREMIOS ---
+  getLeagueQualifiers: (divisionId: number) => { titanPeak: Team[], colossusShield: Team[] };
+  getSeasonAwards: () => { pichichi: Player | undefined, assistMaster: Player | undefined, bestGoalkeeper: Player | undefined };
+  drawTournament: (competitionName: "The Titan Peak" | "Colossus Shield") => Promise<void>;
+  
   resetLeagueData: () => void;
   importLeagueData: (newData: any) => boolean;
   refreshData: () => Promise<void>;

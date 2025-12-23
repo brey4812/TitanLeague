@@ -52,7 +52,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- RECALCULO DE ESTADÍSTICAS (Línea Corregida) ---
+  // --- PROCESAMIENTO DE ESTADÍSTICAS ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -67,7 +67,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         const gAg = isHome ? Number(m.away_goals) : Number(m.home_goals);
         
         stats.goalsFor += gFor;
-        stats.goalsAgainst += gAg; // CORRECCIÓN: Eliminado el stats. duplicado
+        stats.goalsAgainst += gAg;
         
         if (gFor > gAg) { stats.wins += 1; stats.points += 3; }
         else if (gFor === gAg) { stats.draws += 1; stats.points += 1; }
@@ -95,6 +95,83 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
+  // --- CLASIFICACIÓN A COPAS ---
+  const getLeagueQualifiers = useCallback((divisionId: number) => {
+    const sorted = processedTeams
+      .filter(t => Number(t.division_id) === divisionId)
+      .sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        return (b.stats.goalsFor - b.stats.goalsAgainst) - (a.stats.goalsFor - a.stats.goalsAgainst);
+      });
+
+    return {
+      titanPeak: sorted.slice(0, 4), // Champions: Top 4
+      colossusShield: sorted.slice(4, 8) // Europa League: 5º al 8º
+    };
+  }, [processedTeams]);
+
+  // --- SORTEO DE TORNEOS (CHAMPIONS / EUROPA LEAGUE) ---
+  const drawTournament = useCallback(async (competitionName: "The Titan Peak" | "Colossus Shield") => {
+    const qualifiers = getLeagueQualifiers(1); // Tomamos qualifiers de la Div 1
+    const leagueParticipants = competitionName === "The Titan Peak" 
+      ? qualifiers.titanPeak 
+      : qualifiers.colossusShield;
+
+    // Obtener IDs de equipos que ya están en la liga activa para no repetirlos
+    const activeTeamIds = teams.map(t => t.id);
+
+    // Traer equipos de la DB que NO están en la liga para completar los 16 cupos (Octavos)
+    const { data: externalTeams } = await supabase
+      .from('teams')
+      .select('id, name')
+      .not('id', 'in', `(${activeTeamIds.join(',')})`)
+      .limit(16 - leagueParticipants.length);
+
+    const allParticipantIds = [
+      ...leagueParticipants.map(t => t.id),
+      ...(externalTeams?.map(t => t.id) || [])
+    ];
+
+    if (allParticipantIds.length < 2) {
+      toast.error("No hay suficientes equipos para el sorteo");
+      return;
+    }
+
+    // Mezclar y crear llaves
+    const shuffled = [...allParticipantIds].sort(() => Math.random() - 0.5);
+    const tournamentMatches = [];
+
+    for (let i = 0; i < shuffled.length - 1; i += 2) {
+      tournamentMatches.push({
+        home_team: shuffled[i],
+        away_team: shuffled[i + 1],
+        round: 1, // Octavos
+        played: false,
+        division_id: 99, // ID ficticio para separar de liga
+        competition: competitionName,
+        home_goals: 0,
+        away_goals: 0
+      });
+    }
+
+    const { data, error } = await supabase.from('matches').insert(tournamentMatches).select();
+    if (!error && data) {
+      setMatches(prev => [...prev, ...data]);
+      toast.success(`Sorteo de ${competitionName} completado`);
+    }
+  }, [teams, getLeagueQualifiers]);
+
+  // --- PREMIOS DE TEMPORADA ---
+  const getSeasonAwards = useCallback(() => {
+    const allPlayers = processedTeams.flatMap(t => t.roster);
+    return {
+      pichichi: [...allPlayers].sort((a, b) => b.stats.goals - a.stats.goals)[0],
+      assistMaster: [...allPlayers].sort((a, b) => b.stats.assists - a.stats.assists)[0],
+      bestGoalkeeper: [...allPlayers].filter(p => p.position === 'Goalkeeper').sort((a,b) => b.rating - a.rating)[0]
+    };
+  }, [processedTeams]);
+
+  // --- EVENTOS Y PARTIDOS ---
   const getMatchEvents = useCallback((matchId: string | number) => {
     return matchEvents.filter(e => String(e.match_id) === String(matchId))
       .sort((a, b) => a.minute - b.minute);
@@ -188,6 +265,9 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       getMatchEvents,
       getTeamOfTheWeek,
       getBestEleven: (type) => getTeamOfTheWeek(1), 
+      getLeagueQualifiers,
+      getSeasonAwards,
+      drawTournament, // Expuesto para el sorteo de copas
       resetLeagueData,
       importLeagueData: (d: any) => true,
       refreshData
