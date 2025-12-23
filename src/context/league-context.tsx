@@ -27,13 +27,11 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   // --- CARGA DE DATOS ---
   const refreshData = useCallback(async () => {
     try {
-      // 1. Recuperamos la selección de equipos del localStorage (Estado Local persistente)
       const savedTeams = localStorage.getItem('league_active_teams');
       if (savedTeams) {
         setTeams(JSON.parse(savedTeams));
       }
 
-      // 2. Cargamos los partidos reales de la DB
       const { data: matchesData } = await supabase
         .from('matches')
         .select('*')
@@ -51,15 +49,16 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     refreshData();
   }, [refreshData]);
 
-  // Guardar automáticamente la lista de equipos en localStorage cuando cambie
   useEffect(() => {
     if (isLoaded) {
       localStorage.setItem('league_active_teams', JSON.stringify(teams));
     }
   }, [teams, isLoaded]);
 
-  // --- LÓGICA: GENERACIÓN AUTOMÁTICA DE DUELOS ---
+  // --- LÓGICA CORREGIDA: GENERACIÓN DE DUELOS ---
   const autoMatchmaker = useCallback(async () => {
+    if (teams.length < 2) return;
+
     for (const div of divisions) {
       const readyTeams = teams.filter(t => 
         Number(t.division_id) === div.id && 
@@ -67,27 +66,34 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       );
       
       if (readyTeams.length >= 2) {
-        const lastTeam = readyTeams[readyTeams.length - 1];
-        const opponent = readyTeams[readyTeams.length - 2];
+        const teamA = readyTeams[readyTeams.length - 2];
+        const teamB = readyTeams[readyTeams.length - 1];
 
-        const alreadyHasMatch = matches.some((m: any) => 
-          String(m.home_team_id) === String(lastTeam.id) || 
-          String(m.away_team_id) === String(lastTeam.id)
+        // CORRECCIÓN: Usamos el mismo nombre de variable aquí y en el IF
+        const alreadyMatched = matches.some((m: any) => 
+          (String(m.home_team_id) === String(teamA.id) && String(m.away_team_id) === String(teamB.id)) ||
+          (String(m.home_team_id) === String(teamB.id) && String(m.away_team_id) === String(teamA.id))
         );
 
-        if (!alreadyHasMatch) {
+        if (!alreadyMatched) {
+          console.log(`Generando duelo: ${teamA.name} vs ${teamB.name}`);
+          
           const { data, error } = await supabase.from('matches').insert({
-            home_team_id: opponent.id,
-            away_team_id: lastTeam.id,
+            home_team_id: teamA.id,
+            away_team_id: teamB.id,
             round: 1,
             played: false,
             division_id: div.id,
-            competition: "League"
+            competition: "League",
+            home_goals: 0,
+            away_goals: 0
           }).select();
 
           if (!error && data) {
             setMatches(prev => [data[0], ...prev]);
-            toast.info(`Duelo generado: ${opponent.name} vs ${lastTeam.name}`);
+            toast.success(`Duelo generado: ${teamA.name} vs ${teamB.name}`);
+          } else if (error) {
+            console.error("Error Supabase:", error);
           }
         }
       }
@@ -95,30 +101,21 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, [teams, matches, divisions]);
 
   useEffect(() => {
-    if (isLoaded && teams.length >= 2) {
+    if (isLoaded) {
       autoMatchmaker();
     }
-  }, [teams.length, isLoaded, autoMatchmaker]);
+  }, [teams, matches.length, isLoaded, autoMatchmaker]);
 
-
-  // --- GESTIÓN DE EQUIPOS (SIN MODIFICAR LA DB) ---
+  // --- GESTIÓN DE EQUIPOS ---
   const addTeam = useCallback((newTeam: Team) => {
-    // Añadimos al estado local sin hacer .update() en Supabase
     setTeams(prev => {
-      if (prev.find(t => String(t.id) === String(newTeam.id))) {
-        toast.error("El equipo ya está en tu liga");
-        return prev;
-      }
-      toast.success(`${newTeam.name} añadido correctamente`);
+      if (prev.find(t => String(t.id) === String(newTeam.id))) return prev;
       return [...prev, newTeam];
     });
   }, []);
 
   const deleteTeam = useCallback((id: number | string) => {
-    // Quitamos del estado local
     setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
-    
-    // Filtramos partidos locales
     setMatches(prev => prev.filter(m => 
       String(m.home_team_id) !== String(id) && 
       String(m.away_team_id) !== String(id)
@@ -130,7 +127,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     setTeams(prev => prev.map(t => String(t.id) === String(updated.id) ? updated : t));
   }, []);
 
-  // --- GESTIÓN DE JUGADORES (MODO LOCAL) ---
+  // --- GESTIÓN DE JUGADORES ---
   const addPlayerToTeam = useCallback((teamId: number | string, player: Player) => {
     setTeams(prev => prev.map(team => {
       if (String(team.id) === String(teamId)) {
@@ -149,7 +146,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  // --- BÚSQUEDAS ---
   const getTeamById = useCallback((id: number | string) => 
     teams.find(t => String(t.id) === String(id)), [teams]);
   
@@ -160,7 +156,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     teams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))), [teams]);
 
   const resetLeagueData = () => {
-    if (confirm("¿Limpiar liga activa? (No borrará la base de datos global)")) {
+    if (confirm("¿Limpiar liga activa?")) {
       setTeams([]);
       localStorage.removeItem('league_active_teams');
       window.location.reload();
