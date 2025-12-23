@@ -1,31 +1,55 @@
 "use client";
 
-import { useContext } from 'react';
-import { LeagueContext } from '@/context/league-context';
-import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { useContext, useState } from 'react';
+import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, Users, Calendar, Goal } from "lucide-react";
+import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { LeagueContext } from '@/context/league-context';
+import { Trophy, Users, Calendar, Goal, Zap, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export default function DashboardPage() {
-  const { teams, players, matches, isLoaded } = useContext(LeagueContext);
+  const { teams, players, matches, isLoaded, divisions, refreshData } = useContext(LeagueContext);
+  const [isSimulatingAll, setIsSimulatingAll] = useState(false);
 
   if (!isLoaded) {
     return (
-      <div className="flex h-[60vh] items-center justify-center font-black italic text-slate-400 animate-pulse uppercase tracking-tighter">
-        Conectando con la Liga Titán...
+      <div className="flex h-[60vh] items-center justify-center font-black italic text-slate-400 animate-pulse uppercase">
+        Cargando Panel de Control Titán...
       </div>
     );
   }
-
-  // ESTADÍSTICAS AUTOMÁTICAS
+  
   const totalTeams = teams.length;
   const totalPlayers = players.length;
-  const totalGoals = matches.reduce((sum: number, m: any) => 
-    sum + (m.home_goals || 0) + (m.away_goals || 0), 0);
+  const totalGoals = matches.reduce((sum: number, m: any) => sum + (m.home_goals || 0) + (m.away_goals || 0), 0);
   
+  // Calculamos la jornada basándonos en la columna 'round' de tu DB
   const rawRound = matches.length > 0 
     ? Math.max(...matches.map((m: any) => (m.round || 0))) 
     : 1;
+
+  const handleSimulateAll = async () => {
+    setIsSimulatingAll(true);
+    try {
+      const divisionIds = divisions.map((d: any) => d.id);
+      for (const divId of divisionIds) {
+        const res = await fetch("/api/match/simulate-matchday", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ divisionId: divId, matchday: rawRound }),
+        });
+        if (!res.ok) throw new Error(`Error en división ${divId}`);
+      }
+      toast.success("¡Jornada simulada en todas las divisiones!");
+      if (refreshData) await refreshData(); 
+    } catch (error: any) {
+      toast.error("Error: " + error.message);
+    } finally {
+      setIsSimulatingAll(false);
+    }
+  };
 
   const stats = [
     { title: "Equipos", value: totalTeams, icon: <Trophy className="h-5 w-5 text-blue-600" /> },
@@ -36,24 +60,30 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto py-6 space-y-8">
-      {/* TARJETAS DE ESTADO */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <PageHeader title="Panel de Control" description="Resumen en tiempo real de la Liga Titán." />
+        <Button 
+          onClick={handleSimulateAll} 
+          disabled={isSimulatingAll || teams.length === 0}
+          variant="outline"
+          className="bg-amber-50 border-2 border-amber-200 text-amber-700 hover:bg-amber-100 font-black uppercase text-xs"
+        >
+          {isSimulatingAll ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Zap className="mr-2 h-4 w-4 fill-amber-500" />}
+          Simular Todas las Divisiones
+        </Button>
+      </div>
+      
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <Card key={stat.title} className="shadow-sm border-2 border-slate-100">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-black uppercase text-muted-foreground tracking-widest">
-                {stat.title}
-              </CardTitle>
+              <CardTitle className="text-xs font-black uppercase text-muted-foreground tracking-widest">{stat.title}</CardTitle>
               {stat.icon}
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black">{stat.value}</div>
-            </CardContent>
+            <CardContent><div className="text-3xl font-black">{stat.value}</div></CardContent>
           </Card>
         ))}
       </div>
-
-      {/* PANEL DE RESULTADOS (DISEÑO TITAN) */}
       <DashboardClient />
     </div>
   );
