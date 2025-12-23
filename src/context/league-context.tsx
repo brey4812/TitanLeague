@@ -18,7 +18,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   const [matchEvents, setMatchEvents] = useState<MatchEvent[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // --- IDENTIFICADOR DE SESIÓN ÚNICA ---
   const [sessionId] = useState(() => {
     if (typeof window !== 'undefined') {
       let id = localStorage.getItem('league_session_id');
@@ -65,6 +64,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
+  // --- PROCESAMIENTO ESTADÍSTICAS Y RATING DINÁMICO (BASE 6.0) ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -86,16 +86,27 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const updatedRoster = (team.roster || []).map(player => {
         const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
         
-        let cleanSheets = 0;
-        if (player.position === 'Goalkeeper') {
-          cleanSheets = teamMatches.filter(m => {
-            const isHome = String(m.home_team) === String(team.id);
-            return (isHome ? Number(m.away_goals) : Number(m.home_goals)) === 0;
-          }).length;
-        }
-
+        // Estadísticas acumuladas
         const goals = playerEvents.filter(e => e.type === 'GOAL').length;
         const assists = playerEvents.filter(e => e.type === 'ASSIST').length;
+        const yellows = playerEvents.filter(e => e.type === 'YELLOW_CARD').length;
+        const reds = playerEvents.filter(e => e.type === 'RED_CARD').length;
+
+        // Porterías a cero (solo porteros/defensas influyen en rating)
+        const cleanSheets = teamMatches.filter(m => {
+          const isHome = String(m.home_team) === String(team.id);
+          return (isHome ? Number(m.away_goals) : Number(m.home_goals)) === 0;
+        }).length;
+
+        // LÓGICA DE VALORACIÓN (Base 6.0)
+        let currentRating = 6.0;
+        currentRating += (goals * 1.5);
+        currentRating += (assists * 0.8);
+        currentRating -= (yellows * 0.5);
+        currentRating -= (reds * 2.0);
+        if (player.position === 'Goalkeeper' || player.position === 'Defender') {
+           currentRating += (cleanSheets * 1.0);
+        }
 
         return {
           ...player,
@@ -104,12 +115,9 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             goals,
             assists,
             cleanSheets,
-            cards: {
-              yellow: playerEvents.filter(e => e.type === 'YELLOW_CARD').length,
-              red: playerEvents.filter(e => e.type === 'RED_CARD').length,
-            }
+            cards: { yellow: yellows, red: reds }
           },
-          rating: player.rating + (goals * 0.2) + (assists * 0.15) + (cleanSheets * 0.3)
+          rating: Number(currentRating.toFixed(2))
         };
       });
 
@@ -117,16 +125,61 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
+  // --- ONCE IDEAL (SEMANA, MES, AÑO) ---
+  const getBestEleven = useCallback((type: string, value?: number): TeamOfTheWeekPlayer[] => {
+    // 1. Filtrar jugadores candidatos que jugaron en el periodo
+    let filteredMatchIds: string[] = [];
+
+    if (type === 'week' && value) {
+      filteredMatchIds = matches.filter(m => m.round === value && m.played).map(m => String(m.id));
+    } else if (type === 'month' && value) {
+      const start = (value - 1) * 4 + 1;
+      const end = value * 4;
+      filteredMatchIds = matches.filter(m => m.round! >= start && m.round! <= end && m.played).map(m => String(m.id));
+    } else {
+      filteredMatchIds = matches.filter(m => m.played).map(m => String(m.id));
+    }
+
+    const teamIdsInPeriod = matches.filter(m => filteredMatchIds.includes(String(m.id))).flatMap(m => [String(m.home_team), String(m.away_team)]);
+
+    const candidates = processedTeams
+      .filter(t => teamIdsInPeriod.includes(String(t.id)))
+      .flatMap(t => (t.roster || []).map(p => ({
+        ...p, teamName: t.name, teamLogoUrl: t.badge_url, teamDataAiHint: t.real_team_name
+      })));
+
+    // 2. Selección por posición (1-4-3-3)
+    const getTopByPos = (pos: string, limit: number) => 
+      candidates.filter(p => p.position === pos).sort((a, b) => b.rating - a.rating).slice(0, limit);
+
+    const bestEleven = [
+      ...getTopByPos('Goalkeeper', 1),
+      ...getTopByPos('Defender', 4),
+      ...getTopByPos('Midfielder', 3),
+      ...getTopByPos('Forward', 3)
+    ];
+
+    // 3. Relleno de seguridad si faltan posiciones específicas
+    if (bestEleven.length < 11) {
+      const currentIds = bestEleven.map(p => p.id);
+      const fillers = candidates
+        .filter(p => !currentIds.includes(p.id))
+        .sort((a, b) => b.rating - a.rating)
+        .slice(0, 11 - bestEleven.length);
+      return [...bestEleven, ...fillers] as TeamOfTheWeekPlayer[];
+    }
+
+    return bestEleven as TeamOfTheWeekPlayer[];
+  }, [processedTeams, matches]);
+
+  const getTeamOfTheWeek = useCallback((week: number) => getBestEleven('week', week), [getBestEleven]);
+
   const getLeagueQualifiers = useCallback((divisionId: number) => {
     const sorted = processedTeams
       .filter(t => Number(t.division_id) === divisionId)
       .sort((a, b) => (b.points || 0) - (a.points || 0));
     return { titanPeak: sorted.slice(0, 4), colossusShield: sorted.slice(4, 8) };
   }, [processedTeams]);
-
-  const drawTournament = useCallback(async (competitionName: "The Titan Peak" | "Colossus Shield") => {
-    toast.success(`${competitionName} sorteada.`);
-  }, []);
 
   const getSeasonAwards = useCallback(() => {
     const allPlayers = processedTeams.flatMap(t => t.roster);
@@ -140,12 +193,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   const getMatchEvents = useCallback((matchId: string | number) => {
     return matchEvents.filter(e => String(e.match_id) === String(matchId)).sort((a, b) => a.minute - b.minute);
   }, [matchEvents]);
-
-  const getTeamOfTheWeek = useCallback((week: number): TeamOfTheWeekPlayer[] => {
-    const teamIdsInWeek = matches.filter(m => Number(m.round) === week && m.played).flatMap(m => [String(m.home_team), String(m.away_team)]);
-    const candidates = processedTeams.filter(t => teamIdsInWeek.includes(String(t.id))).flatMap(t => t.roster.map(p => ({ ...p, teamName: t.name, teamLogoUrl: t.badge_url, teamDataAiHint: t.real_team_name })));
-    return candidates.sort((a, b) => b.rating - a.rating).slice(0, 11);
-  }, [processedTeams, matches]);
 
   const autoMatchmaker = useCallback(async () => {
     if (teams.length < 2 || !isLoaded) return;
@@ -195,7 +242,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       matchEvents,
       players: processedTeams.flatMap(t => t.roster || []),
       isLoaded,
-      sessionId, // <--- ESTA LÍNEA ES LA QUE TE FALTA PARA QUITAR EL ERROR
+      sessionId,
       addTeam: (t) => setTeams(prev => [...prev, t]),
       deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))),
       updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)),
@@ -207,10 +254,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       simulateMatchday: () => {}, 
       getMatchEvents,
       getTeamOfTheWeek,
-      getBestEleven: (type) => getTeamOfTheWeek(1), 
+      getBestEleven, // Ahora soporta tipo y valor
       getLeagueQualifiers,
       getSeasonAwards,
-      drawTournament, 
+      drawTournament: (name) => Promise.resolve(), 
       resetLeagueData,
       importLeagueData: (d: any) => true,
       refreshData

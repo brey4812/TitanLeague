@@ -8,7 +8,7 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
-    // 1. Recibimos el sessionId para que la simulación solo afecte a tu liga
+    // 1. Recibimos el sessionId para garantizar que la simulación sea privada
     const { divisionId, week, sessionId } = await req.json();
 
     if (!divisionId || !week || !sessionId) {
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Buscamos partidos filtrando por tu sesión
+    // 2. Buscamos partidos pendientes para esta sesión y jornada
     const { data: matches, error: matchError } = await supabase
       .from("matches")
       .select("id, home_team, away_team")
@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, message: "No hay partidos pendientes." });
     }
 
+    // Obtenemos los jugadores de los equipos involucrados
     const teamIds = matches.flatMap(m => [m.home_team, m.away_team]);
     const { data: allPlayers, error: playerError } = await supabase
       .from("players")
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
       const homeRoster = allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [];
       const awayRoster = allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || [];
 
-      // Función interna para repartir Goles, Asistencias y Tarjetas
+      // Función para generar sucesos (Goles, Asistencias, Tarjetas)
       const generateEvents = (roster: any[], goals: number) => {
         if (roster.length === 0) return;
 
@@ -66,19 +67,13 @@ export async function POST(req: Request) {
           const minute = Math.floor(Math.random() * 90) + 1;
           const scorer = roster[Math.floor(Math.random() * roster.length)];
           
-          // REGISTRO DE GOL
-          events.push({
-            match_id: match.id,
-            player_id: scorer.id,
-            playerName: scorer.name,
-            type: 'GOAL',
-            minute,
-            session_id: sessionId
-          });
+          let assistantName = null;
 
-          // LÓGICA DE ASISTENCIA (70% de probabilidad)
+          // Lógica de Asistencia (70% de probabilidad)
           if (Math.random() < 0.7 && roster.length > 1) {
             const assistant = roster.filter(p => p.id !== scorer.id)[Math.floor(Math.random() * (roster.length - 1))];
+            assistantName = assistant.name;
+            
             events.push({
               match_id: match.id,
               player_id: assistant.id,
@@ -88,16 +83,29 @@ export async function POST(req: Request) {
               session_id: sessionId
             });
           }
+
+          // Registro de GOL
+          events.push({
+            match_id: match.id,
+            player_id: scorer.id,
+            playerName: scorer.name,
+            assistName: assistantName, // Vinculamos el nombre del asistente para el modal
+            type: 'GOAL',
+            minute,
+            session_id: sessionId
+          });
         }
 
-        // LÓGICA DE TARJETAS (Probabilidad aleatoria por partido)
-        if (Math.random() < 0.3) { // 30% de probabilidad de que el equipo reciba una tarjeta
+        // LÓGICA DE TARJETAS (40% de probabilidad por equipo)
+        if (Math.random() < 0.4) {
           const penalized = roster[Math.floor(Math.random() * roster.length)];
+          const isRed = Math.random() < 0.15; // 15% de que sea roja directa
+          
           events.push({
             match_id: match.id,
             player_id: penalized.id,
             playerName: penalized.name,
-            type: Math.random() < 0.85 ? 'YELLOW_CARD' : 'RED_CARD',
+            type: isRed ? 'RED_CARD' : 'YELLOW_CARD',
             minute: Math.floor(Math.random() * 90) + 1,
             session_id: sessionId
           });
@@ -107,15 +115,16 @@ export async function POST(req: Request) {
       generateEvents(homeRoster, homeGoals);
       generateEvents(awayRoster, awayGoals);
 
-      // 4. Insertar todos los sucesos de una vez
+      // 4. Inserción masiva de eventos
       if (events.length > 0) {
-        await supabase.from("match_events").insert(events);
+        const { error: insertError } = await supabase.from("match_events").insert(events);
+        if (insertError) console.error("Error insertando eventos:", insertError.message);
       }
     }
 
     return NextResponse.json({ 
       ok: true, 
-      message: `Simulación exitosa: ${matches.length} partidos y sucesos registrados.` 
+      message: `Simulación exitosa: ${matches.length} partidos y sus sucesos registrados.` 
     });
 
   } catch (err: any) {
