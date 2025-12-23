@@ -24,25 +24,22 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     { id: 4, name: "Cuarta División" }
   ];
 
-  // --- CARGA DE DATOS FILTRADA ---
+  // --- CARGA DE DATOS ---
   const refreshData = useCallback(async () => {
     try {
-      localStorage.removeItem('league_teams');
-      localStorage.removeItem('league-data');
+      // 1. Recuperamos la selección de equipos del localStorage (Estado Local persistente)
+      const savedTeams = localStorage.getItem('league_active_teams');
+      if (savedTeams) {
+        setTeams(JSON.parse(savedTeams));
+      }
 
-      // CLAVE: Solo traemos los equipos que el usuario "activó" para su liga
-      const { data: teamsData } = await supabase
-        .from('teams')
-        .select('*, roster:players(*)')
-        .eq('is_active', true); // Asegúrate de tener esta columna en Supabase
-      
+      // 2. Cargamos los partidos reales de la DB
       const { data: matchesData } = await supabase
         .from('matches')
         .select('*')
         .order('created_at', { ascending: false });
 
-      setTeams(teamsData || []);
-      setMatches(matchesData || []);
+      if (matchesData) setMatches(matchesData);
     } catch (error) {
       console.error("Error al refrescar datos:", error);
     } finally {
@@ -53,6 +50,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     refreshData();
   }, [refreshData]);
+
+  // Guardar automáticamente la lista de equipos en localStorage cuando cambie
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('league_active_teams', JSON.stringify(teams));
+    }
+  }, [teams, isLoaded]);
 
   // --- LÓGICA: GENERACIÓN AUTOMÁTICA DE DUELOS ---
   const autoMatchmaker = useCallback(async () => {
@@ -67,28 +71,28 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         const opponent = readyTeams[readyTeams.length - 2];
 
         const alreadyHasMatch = matches.some((m: any) => 
-          m.home_team_id === lastTeam.id || m.away_team_id === lastTeam.id ||
-          m.home_team_id === opponent.id || m.away_team_id === opponent.id
+          String(m.home_team_id) === String(lastTeam.id) || 
+          String(m.away_team_id) === String(lastTeam.id)
         );
 
         if (!alreadyHasMatch) {
-          const { error } = await supabase.from('matches').insert({
+          const { data, error } = await supabase.from('matches').insert({
             home_team_id: opponent.id,
             away_team_id: lastTeam.id,
             round: 1,
             played: false,
             division_id: div.id,
             competition: "League"
-          });
+          }).select();
 
-          if (!error) {
-            refreshData();
+          if (!error && data) {
+            setMatches(prev => [data[0], ...prev]);
             toast.info(`Duelo generado: ${opponent.name} vs ${lastTeam.name}`);
           }
         }
       }
     }
-  }, [teams, matches, refreshData, divisions]);
+  }, [teams, matches, divisions]);
 
   useEffect(() => {
     if (isLoaded && teams.length >= 2) {
@@ -97,55 +101,40 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, [teams.length, isLoaded, autoMatchmaker]);
 
 
-  // --- GESTIÓN DE EQUIPOS (MODO SELECTOR) ---
-  const addTeam = useCallback(async (newTeam: Team) => {
-    try {
-      // En lugar de solo añadirlo al estado, lo marcamos como activo en la DB
-      const { error } = await supabase
-        .from('teams')
-        .update({ is_active: true })
-        .eq('id', newTeam.id);
-
-      if (error) throw error;
-
-      setTeams(prev => {
-        if (prev.find(t => String(t.id) === String(newTeam.id))) return prev;
-        return [...prev, newTeam];
-      });
-      toast.success(`${newTeam.name} añadido a la liga`);
-    } catch (e) {
-      toast.error("Error al activar equipo");
-    }
+  // --- GESTIÓN DE EQUIPOS (SIN MODIFICAR LA DB) ---
+  const addTeam = useCallback((newTeam: Team) => {
+    // Añadimos al estado local sin hacer .update() en Supabase
+    setTeams(prev => {
+      if (prev.find(t => String(t.id) === String(newTeam.id))) {
+        toast.error("El equipo ya está en tu liga");
+        return prev;
+      }
+      toast.success(`${newTeam.name} añadido correctamente`);
+      return [...prev, newTeam];
+    });
   }, []);
 
-  const deleteTeam = useCallback(async (id: number | string) => {
-    try {
-      // NO borramos de la DB, solo lo desactivamos de la liga
-      await supabase
-        .from('teams')
-        .update({ is_active: false })
-        .eq('id', id);
-
-      setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
-      setMatches(prev => prev.filter(m => 
-        String(m.home_team_id) !== String(id) && 
-        String(m.away_team_id) !== String(id)
-      ));
-      toast.success("Equipo quitado de la liga (permanece en la DB)");
-    } catch (e) {
-      toast.error("Error al quitar equipo");
-    }
+  const deleteTeam = useCallback((id: number | string) => {
+    // Quitamos del estado local
+    setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
+    
+    // Filtramos partidos locales
+    setMatches(prev => prev.filter(m => 
+      String(m.home_team_id) !== String(id) && 
+      String(m.away_team_id) !== String(id)
+    ));
+    toast.success("Equipo quitado de la liga");
   }, []);
 
   const updateTeam = useCallback((updated: Team) => {
     setTeams(prev => prev.map(t => String(t.id) === String(updated.id) ? updated : t));
   }, []);
 
-  // --- GESTIÓN DE JUGADORES (SIN CAMBIOS) ---
+  // --- GESTIÓN DE JUGADORES (MODO LOCAL) ---
   const addPlayerToTeam = useCallback((teamId: number | string, player: Player) => {
     setTeams(prev => prev.map(team => {
       if (String(team.id) === String(teamId)) {
-        return { ...team, roster: [...team.roster, player] };
+        return { ...team, roster: [...(team.roster || []), player] };
       }
       return team;
     }));
@@ -154,7 +143,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   const removePlayerFromTeam = useCallback((teamId: number | string, playerId: number | string) => {
     setTeams(prev => prev.map(team => {
       if (String(team.id) === String(teamId)) {
-        return { ...team, roster: team.roster.filter(p => String(p.id) !== String(playerId)) };
+        return { ...team, roster: (team.roster || []).filter(p => String(p.id) !== String(playerId)) };
       }
       return team;
     }));
@@ -168,11 +157,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     teams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)), [teams]);
 
   const getTeamByPlayerId = useCallback((pid: number | string) => 
-    teams.find(t => t.roster.some(p => String(p.id) === String(pid))), [teams]);
+    teams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))), [teams]);
 
   const resetLeagueData = () => {
-    if (confirm("¿Limpiar vista actual?")) {
-      localStorage.clear();
+    if (confirm("¿Limpiar liga activa? (No borrará la base de datos global)")) {
+      setTeams([]);
+      localStorage.removeItem('league_active_teams');
       window.location.reload();
     }
   };
