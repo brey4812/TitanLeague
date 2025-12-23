@@ -17,32 +17,34 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Buscamos los jugadores vinculados a los equipos de los partidos
-    // Usamos 'players!home_team' para decirle a Supabase que use la FK de home_team para buscar jugadores
-    const { data: matches, error: fetchError } = await supabase
+    // 1. Obtener los partidos sin intentar hacer joins con players
+    const { data: matches, error: matchError } = await supabase
       .from("matches")
-      .select(`
-        id,
-        home_team,
-        away_team,
-        home_players:players!home_team ( id ),
-        away_players:players!away_team ( id )
-      `)
+      .select("id, home_team, away_team")
       .eq("division_id", divisionId)
       .eq("round", week)
       .eq("played", false);
 
-    if (fetchError) throw fetchError;
+    if (matchError) throw matchError;
     if (!matches || matches.length === 0) {
       return NextResponse.json({ ok: true, message: "No hay partidos pendientes." });
     }
+
+    // 2. Extraer todos los IDs de equipos para traer sus jugadores en una sola consulta
+    const teamIds = matches.flatMap(m => [m.home_team, m.away_team]);
+    const { data: allPlayers, error: playerError } = await supabase
+      .from("players")
+      .select("id, team_id")
+      .in("team_id", teamIds);
+
+    if (playerError) throw playerError;
 
     for (const match of matches) {
       const homeGoals = Math.floor(Math.random() * 5); 
       const awayGoals = Math.floor(Math.random() * 4); 
 
-      // 2. Actualizar el marcador del partido
-      const { error: updateError } = await supabase
+      // 3. Actualizar el marcador del partido
+      await supabase
         .from("matches")
         .update({
           home_goals: homeGoals,
@@ -51,13 +53,12 @@ export async function POST(req: Request) {
         })
         .eq("id", match.id);
 
-      if (updateError) throw updateError;
-
-      // 3. Generar Sucesos (Goles) para la tabla match_events
+      // 4. Filtrar jugadores localmente para asignar los goles
       const events: any[] = [];
-      
-      // Goles Locales (usando home_players)
-      const homeRoster = (match as any).home_players || [];
+      const homeRoster = allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [];
+      const awayRoster = allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || [];
+
+      // Goles Locales
       for (let i = 0; i < homeGoals; i++) {
         if (homeRoster.length > 0) {
           const scorer = homeRoster[Math.floor(Math.random() * homeRoster.length)];
@@ -70,8 +71,7 @@ export async function POST(req: Request) {
         }
       }
 
-      // Goles Visitantes (usando away_players)
-      const awayRoster = (match as any).away_players || [];
+      // Goles Visitantes
       for (let i = 0; i < awayGoals; i++) {
         if (awayRoster.length > 0) {
           const scorer = awayRoster[Math.floor(Math.random() * awayRoster.length)];
@@ -84,20 +84,18 @@ export async function POST(req: Request) {
         }
       }
 
-      // 4. Insertar eventos en la DB si hubo goles
+      // 5. Insertar eventos si hubo goles
       if (events.length > 0) {
-        const { error: eventError } = await supabase.from("match_events").insert(events);
-        if (eventError) console.error("Error al insertar eventos:", eventError.message);
+        await supabase.from("match_events").insert(events);
       }
     }
 
     return NextResponse.json({ 
       ok: true, 
-      message: `Simulación exitosa: ${matches.length} partidos y sus goleadores registrados.` 
+      message: `Simulación exitosa: ${matches.length} partidos procesados.` 
     });
 
   } catch (err: any) {
-    console.error("Error en simulate-matchday:", err.message);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }
