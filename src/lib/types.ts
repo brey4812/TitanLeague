@@ -9,6 +9,7 @@ export interface Player {
   country?: string; 
   face_url?: string; 
   rating: number;
+  team_id?: number | string; // Añadido para facilitar filtrado
   stats: {
     goals: number;
     assists: number;
@@ -41,7 +42,7 @@ export interface Team {
     goalsAgainst: number;
   };
   roster: Player[];
-  points?: number; // Añadido para facilitar ordenamiento
+  points?: number; 
 }
 
 export interface Division {
@@ -54,9 +55,11 @@ export interface MatchEvent {
   match_id: number | string;
   player_id: number | string;
   playerName?: string;
+  assistName?: string; // Añadido para mostrar quién asistió en el modal
   team_id?: number | string;
   type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST';
   minute: number;
+  session_id?: string; // Coincide con tu columna en Supabase
 }
 
 export interface MatchResult {
@@ -70,7 +73,8 @@ export interface MatchResult {
   round?: number; 
   played: boolean; 
   division_id: number;
-  competition?: string; // Para distinguir entre "League", "The Titan Peak", etc.
+  competition?: string; 
+  session_id?: string; // Coincide con tu columna en Supabase
   homeTeamId?: number | string;
   awayTeamId?: number | string;
   homeScore?: number;
@@ -93,6 +97,7 @@ export interface LeagueContextType {
   matchEvents: MatchEvent[];
   players: Player[];
   isLoaded: boolean;
+  sessionId: string; // PROPIEDAD CRÍTICA AÑADIDA PARA ELIMINAR EL ERROR
   addTeam: (team: Team) => void;
   deleteTeam: (id: number | string) => void;
   updateTeam: (team: Team) => void;
@@ -106,7 +111,7 @@ export interface LeagueContextType {
   getTeamOfTheWeek: (week: number) => TeamOfTheWeekPlayer[];
   getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
   
-  // --- NUEVAS FUNCIONES PARA COPAS Y PREMIOS ---
+  // --- FUNCIONES PARA COPAS Y PREMIOS ---
   getLeagueQualifiers: (divisionId: number) => { titanPeak: Team[], colossusShield: Team[] };
   getSeasonAwards: () => { pichichi: Player | undefined, assistMaster: Player | undefined, bestGoalkeeper: Player | undefined };
   drawTournament: (competitionName: "The Titan Peak" | "Colossus Shield") => Promise<void>;

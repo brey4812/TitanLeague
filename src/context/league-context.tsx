@@ -43,7 +43,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const savedTeams = localStorage.getItem('league_active_teams');
       if (savedTeams) setTeams(JSON.parse(savedTeams));
 
-      // Filtramos por sessionId para que cada usuario tenga su liga
       const [matchesRes, eventsRes] = await Promise.all([
         supabase.from('matches').select('*').eq('session_id', sessionId).order('round', { ascending: true }),
         supabase.from('match_events').select('*').eq('session_id', sessionId)
@@ -66,7 +65,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- PROCESAMIENTO ESTADÍSTICAS (Incluye Asistencias y Clean Sheets) ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -88,7 +86,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const updatedRoster = (team.roster || []).map(player => {
         const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
         
-        // Clean Sheets
         let cleanSheets = 0;
         if (player.position === 'Goalkeeper') {
           cleanSheets = teamMatches.filter(m => {
@@ -120,16 +117,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
-  // --- FUNCIONES REQUERIDAS PARA EL CONTEXTO ---
   const getLeagueQualifiers = useCallback((divisionId: number) => {
     const sorted = processedTeams
       .filter(t => Number(t.division_id) === divisionId)
-      .sort((a, b) => b.points - a.points);
+      .sort((a, b) => (b.points || 0) - (a.points || 0));
     return { titanPeak: sorted.slice(0, 4), colossusShield: sorted.slice(4, 8) };
   }, [processedTeams]);
 
   const drawTournament = useCallback(async (competitionName: "The Titan Peak" | "Colossus Shield") => {
-    // Implementación lógica de sorteo
     toast.success(`${competitionName} sorteada.`);
   }, []);
 
@@ -170,7 +165,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           const { data } = await supabase.from('matches').insert({
             home_team: shuffled[i].id, away_team: shuffled[i+1].id, round: currentWeek, 
             played: false, division_id: div.id, competition: "League", 
-            session_id: sessionId // Bloqueo por sesión
+            session_id: sessionId 
           }).select();
           if (data) setMatches(prev => [...prev, data[0]]);
         }
@@ -200,6 +195,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       matchEvents,
       players: processedTeams.flatMap(t => t.roster || []),
       isLoaded,
+      sessionId, // <--- ESTA LÍNEA ES LA QUE TE FALTA PARA QUITAR EL ERROR
       addTeam: (t) => setTeams(prev => [...prev, t]),
       deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))),
       updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)),

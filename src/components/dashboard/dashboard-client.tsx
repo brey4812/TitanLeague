@@ -8,15 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileText, Download, Play, ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { MatchResult } from "@/lib/types"; // Importamos el tipo
+import { MatchResult } from "@/lib/types";
 
-// AÑADIMOS LA INTERFAZ PARA RECIBIR LA FUNCIÓN DEL PADRE
 interface DashboardClientProps {
   onMatchClick?: (match: MatchResult) => void;
 }
 
 export function DashboardClient({ onMatchClick }: DashboardClientProps) {
-  const { matches, divisions, getTeamById, isLoaded, refreshData } = useContext(LeagueContext);
+  // EXTRAEMOS sessionId DEL CONTEXTO PARA ENVIARLO A LA API
+  const { matches, divisions, getTeamById, isLoaded, refreshData, sessionId } = useContext(LeagueContext);
   const [isPending, startTransition] = useTransition();
   
   const [displayedDivision, setDisplayedDivision] = useState<string>("1");
@@ -43,7 +43,8 @@ export function DashboardClient({ onMatchClick }: DashboardClientProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             divisionId: displayedDivision, 
-            week: displayedWeek 
+            week: displayedWeek,
+            sessionId: sessionId // ENVIAMOS EL ID DE SESIÓN
           })
         });
         
@@ -67,7 +68,8 @@ export function DashboardClient({ onMatchClick }: DashboardClientProps) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               divisionId: div.id, 
-              week: displayedWeek 
+              week: displayedWeek,
+              sessionId: sessionId // ENVIAMOS EL ID DE SESIÓN
             })
           });
           if (!response.ok) throw new Error(`Error en división ${div.id}`);
@@ -180,7 +182,6 @@ export function DashboardClient({ onMatchClick }: DashboardClientProps) {
                     </div>
 
                     <div className="pl-4">
-                      {/* BOTÓN DEL PAPEL VINCULADO AL MODAL */}
                       <Button 
                         variant="ghost" 
                         size="icon" 
