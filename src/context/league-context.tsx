@@ -13,7 +13,6 @@ const supabase = createClient(
 export const LeagueContext = createContext<LeagueContextType>({} as LeagueContextType);
 
 export const LeagueProvider = ({ children }: { children: ReactNode }) => {
-  // --- ESTADO INICIAL SIEMPRE VACÍO ---
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -25,24 +24,23 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     { id: 4, name: "Cuarta División" }
   ];
 
-  // --- CARGA DE DATOS ESTRICTA DESDE SUPABASE ---
+  // --- CARGA DE DATOS FILTRADA ---
   const refreshData = useCallback(async () => {
     try {
-      // 1. Limpieza de posibles datos antiguos en el navegador para evitar los 70 equipos
       localStorage.removeItem('league_teams');
-      localStorage.removeItem('league_matches');
       localStorage.removeItem('league-data');
 
+      // CLAVE: Solo traemos los equipos que el usuario "activó" para su liga
       const { data: teamsData } = await supabase
         .from('teams')
-        .select('*, roster:players(*)');
+        .select('*, roster:players(*)')
+        .eq('is_active', true); // Asegúrate de tener esta columna en Supabase
       
       const { data: matchesData } = await supabase
         .from('matches')
         .select('*')
         .order('created_at', { ascending: false });
 
-      // Solo asignamos lo que viene de la base de datos real
       setTeams(teamsData || []);
       setMatches(matchesData || []);
     } catch (error) {
@@ -52,7 +50,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // Al montar, limpiamos el navegador y traemos solo lo de Supabase
   useEffect(() => {
     refreshData();
   }, [refreshData]);
@@ -100,28 +97,51 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, [teams.length, isLoaded, autoMatchmaker]);
 
 
-  // --- GESTIÓN DE EQUIPOS ---
-  const addTeam = useCallback((newTeam: Team) => {
-    setTeams(prev => {
-      if (prev.find(t => String(t.id) === String(newTeam.id))) return prev;
-      return [...prev, newTeam];
-    });
+  // --- GESTIÓN DE EQUIPOS (MODO SELECTOR) ---
+  const addTeam = useCallback(async (newTeam: Team) => {
+    try {
+      // En lugar de solo añadirlo al estado, lo marcamos como activo en la DB
+      const { error } = await supabase
+        .from('teams')
+        .update({ is_active: true })
+        .eq('id', newTeam.id);
+
+      if (error) throw error;
+
+      setTeams(prev => {
+        if (prev.find(t => String(t.id) === String(newTeam.id))) return prev;
+        return [...prev, newTeam];
+      });
+      toast.success(`${newTeam.name} añadido a la liga`);
+    } catch (e) {
+      toast.error("Error al activar equipo");
+    }
   }, []);
 
-  const deleteTeam = useCallback((id: number | string) => {
-    setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
-    setMatches(prev => prev.filter(m => 
-      String(m.home_team_id) !== String(id) && 
-      String(m.away_team_id) !== String(id)
-    ));
-    toast.success("Equipo quitado de la lista");
+  const deleteTeam = useCallback(async (id: number | string) => {
+    try {
+      // NO borramos de la DB, solo lo desactivamos de la liga
+      await supabase
+        .from('teams')
+        .update({ is_active: false })
+        .eq('id', id);
+
+      setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
+      setMatches(prev => prev.filter(m => 
+        String(m.home_team_id) !== String(id) && 
+        String(m.away_team_id) !== String(id)
+      ));
+      toast.success("Equipo quitado de la liga (permanece en la DB)");
+    } catch (e) {
+      toast.error("Error al quitar equipo");
+    }
   }, []);
 
   const updateTeam = useCallback((updated: Team) => {
     setTeams(prev => prev.map(t => String(t.id) === String(updated.id) ? updated : t));
   }, []);
 
-  // --- GESTIÓN DE JUGADORES ---
+  // --- GESTIÓN DE JUGADORES (SIN CAMBIOS) ---
   const addPlayerToTeam = useCallback((teamId: number | string, player: Player) => {
     setTeams(prev => prev.map(team => {
       if (String(team.id) === String(teamId)) {
@@ -151,7 +171,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     teams.find(t => t.roster.some(p => String(p.id) === String(pid))), [teams]);
 
   const resetLeagueData = () => {
-    if (confirm("¿Limpiar todos los datos del navegador?")) {
+    if (confirm("¿Limpiar vista actual?")) {
       localStorage.clear();
       window.location.reload();
     }
