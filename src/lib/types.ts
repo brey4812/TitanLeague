@@ -3,12 +3,12 @@
  */
 
 export interface Player {
-  id: number | string;
+  id: number;
   name: string;
-  nationality: string;
-  position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward';
-  rating: number; 
-  image_url?: string;
+  position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward'; // Obligatorio para la IA
+  country?: string; // País del jugador
+  face_url?: string; // URL opcional de la cara
+  rating: number;
   stats: {
     goals: number;
     assists: number;

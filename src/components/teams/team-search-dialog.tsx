@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { LeagueContext } from "@/context/league-context";
 import { Search, Globe, PlusCircle, Loader2 } from "lucide-react";
 
-// Configuración de Supabase
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!, 
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -42,7 +41,7 @@ export function TeamSearchDialog({
     setLoading(true);
     const { data, error } = await supabase
       .from('teams')
-      .select('*')
+      .select('id, name, country, badge_url, logo, division_id')
       .ilike('name', `%${term}%`)
       .limit(6);
 
@@ -55,41 +54,40 @@ export function TeamSearchDialog({
   const handleImport = async (dbTeam: any) => {
     setImporting(dbTeam.id);
     
-    // 1. Buscamos automáticamente los jugadores asociados a este equipo en la base de datos
+    // 1. Buscamos jugadores trayendo explícitamente las columnas para tu IA
     const { data: playersData, error: playersError } = await supabase
       .from('players')
-      .select('*')
+      .select('id, name, position, country, face_url, rating, overall')
       .eq('team_id', dbTeam.id)
-      .limit(20); // Respetamos tu límite de 20 jugadores
+      .limit(20);
 
     if (playersError) {
-      console.error("Error cargando jugadores de la DB:", playersError);
+      console.error("Error cargando jugadores:", playersError);
     }
 
-    // 2. Adaptamos los datos de la DB al estado de la liga local
+    // 2. Formateamos el equipo con prioridad a badge_url
     const formattedTeam = {
       ...dbTeam,
-      // Prioridad absoluta a badge_url para que no salga la imagen rota
       badge_url: dbTeam.badge_url || dbTeam.logo || '/placeholder-team.png',
-      stats: {
-        wins: 0,
-        draws: 0,
-        losses: 0,
-        goalsFor: 0,
-        goalsAgainst: 0
-      },
-      // 3. Mapeamos los jugadores encontrados o array vacío
-      roster: playersData ? playersData.map(p => ({
+      stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
+      
+      // 3. Mapeo PRO para la IA de probabilidades y caras
+      roster: playersData ? playersData.map((p: any) => ({
         id: p.id,
         name: p.name,
-        nationality: p.nationality || "Desconocida",
-        position: p.position || 'Midfielder',
-        overall: p.overall || p.rating || 60,
-        image_url: p.image_url || null // Imagen opcional para jugadores
+        // Unificamos nacionalidad para evitar el error de TS
+        nationality: String(p.country || "Spain"), 
+        // Posición real para el cálculo de gol (IA)
+        position: (p.position || 'Forward') as 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward',
+        rating: Number(p.rating || p.overall || 75),
+        // La URL de la cara que pediste
+        face_url: p.face_url || null 
       })) : []
     };
 
     addTeam(formattedTeam);
+    
+    // Reset de estados
     setImporting(null);
     onOpenChange(false); 
     setQuery("");
@@ -101,7 +99,7 @@ export function TeamSearchDialog({
       <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-            <Search className="h-5 w-5" /> Base de Datos de Clubes
+            <Search className="h-5 w-5 text-blue-600" /> Base de Datos de Clubes
           </DialogTitle>
         </DialogHeader>
         
@@ -112,33 +110,34 @@ export function TeamSearchDialog({
               placeholder="Escribe el club que buscas..." 
               value={query} 
               onChange={(e) => handleSearch(e.target.value)}
-              className="pl-10 h-12"
+              className="pl-10 h-12 border-2 focus:border-blue-500"
             />
           </div>
 
           <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
             {loading ? (
-              <div className="flex flex-col items-center py-10 text-muted-foreground font-medium">
-                <Loader2 className="h-8 w-8 animate-spin mb-2" />
+              <div className="flex flex-col items-center py-10 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin mb-2 text-blue-600" />
                 <p>Consultando Base de Datos...</p>
               </div>
             ) : results.length > 0 ? (
               results.map((t) => (
                 <div 
                   key={t.id} 
-                  className="flex items-center justify-between p-3 border rounded-xl hover:bg-slate-50 transition-all border-slate-100"
+                  className="flex items-center justify-between p-3 border-2 rounded-xl hover:border-blue-200 hover:bg-blue-50/30 transition-all"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="relative h-12 w-12 bg-white rounded-lg border p-1 shadow-sm flex items-center justify-center">
+                    <div className="relative h-12 w-12 bg-white rounded-lg p-1 flex items-center justify-center border shadow-sm">
                       <img 
                         src={t.badge_url || t.logo || '/placeholder-team.png'} 
-                        alt={t.name} 
-                        className="object-contain max-h-full max-w-full" 
+                        alt="" 
+                        className="object-contain max-h-full max-w-full"
+                        onError={(e) => {(e.target as HTMLImageElement).src = '/placeholder-team.png'}}
                       />
                     </div>
-                    <div className="overflow-hidden">
-                      <p className="text-sm font-bold truncate text-slate-900 leading-tight">{t.name}</p>
-                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1 uppercase font-semibold">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{t.name}</p>
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1 uppercase font-black">
                         <Globe className="h-2.5 w-2.5" /> {t.country || 'Sin País'}
                       </p>
                     </div>
@@ -147,22 +146,21 @@ export function TeamSearchDialog({
                     size="sm" 
                     disabled={importing === t.id}
                     onClick={() => handleImport(t)} 
-                    className="gap-1 h-8 bg-blue-600 hover:bg-blue-700"
+                    className="bg-blue-600 hover:bg-blue-700 font-bold"
                   >
                     {importing === t.id ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <PlusCircle className="h-3.5 w-3.5" />
+                      'Importar'
                     )}
-                    {importing === t.id ? 'Importando...' : 'Importar'}
                   </Button>
                 </div>
               ))
-            ) : query.length > 2 ? (
+            ) : query.length > 2 && (
               <div className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">
                 No hay coincidencias para "{query}"
               </div>
-            ) : null}
+            )}
           </div>
         </div>
       </DialogContent>
