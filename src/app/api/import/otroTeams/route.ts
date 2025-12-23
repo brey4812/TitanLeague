@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Inicializamos Supabase con Service Role para saltar RLS
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -27,45 +26,40 @@ export async function GET() {
 
   try {
     for (const item of MIS_EQUIPOS_LALIGA) {
-      // 1. Consultar datos del equipo en TheSportsDB
       const response = await fetch(`https://www.thesportsdb.com/api/v1/json/3/lookupteam.php?id=${item.id}`);
       const data = await response.json();
       
       if (!data.teams) continue;
       const t = data.teams[0];
 
-      // 2. Insertar/Actualizar en la tabla 'teams' de Supabase
-      // IMPORTANTE: Aquí NO enviamos la columna 'roster' para evitar el error 400
+      // MAPEADO SEGÚN TU TABLA REAL
       const { error } = await supabase
         .from("teams")
         .upsert({
           id: parseInt(t.idTeam),
           name: t.strTeam,
+          real_team_name: t.strTeam,
           country: t.strCountry,
+          league: t.strLeague,
           badge_url: t.strTeamBadge,
           external_id: t.idTeam,
-          division_id: 1, // Primera División por defecto
-          overall: 80,
-          attack: 80,
-          midfield: 80,
-          defense: 80,
-          stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 }
+          division_id: 1, // Lo ponemos en 1 para que aparezca en tu liga
+          // Columnas de rendimiento que sí existen en tu tabla
+          attack: 75,
+          midfield: 75,
+          defense: 75,
+          overall: 75,
+          // NOTA: No enviamos 'stats' ni 'roster' porque no existen como columnas
         });
 
       if (error) {
-        console.error(`Error con ${t.strTeam}:`, error.message);
-        summary.push({ team: item.name, status: "Error", detail: error.message });
+        summary.push({ team: t.strTeam, status: "Error", detail: error.message });
       } else {
-        summary.push({ team: t.strTeam, status: "Equipo Creado/Actualizado" });
+        summary.push({ team: t.strTeam, status: "Éxito" });
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Fase 1: Importación de equipos completada",
-      details: summary
-    });
-
+    return NextResponse.json({ success: true, details: summary });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
