@@ -20,7 +20,6 @@ export async function GET() {
 
   try {
     for (const equipo of EQUIPOS_LALIGA) {
-      // 1. Obtener jugadores de la API externa
       const response = await fetch(`https://www.thesportsdb.com/api/v1/json/3/lookup_all_players.php?id=${equipo.id}`);
       const data = await response.json();
 
@@ -29,29 +28,41 @@ export async function GET() {
         continue;
       }
 
-      // 2. Mapear al formato de tu tabla 'players'
+      // Mapear al formato de tu tabla 'players'
       const playersToInsert = data.player.slice(0, 20).map((p: any) => ({
-        team_id: parseInt(equipo.id), // Vinculación con la tabla 'teams'
+        // Usamos el ID de la API si existe para evitar duplicados absolutos
+        id: p.idPlayer ? parseInt(p.idPlayer) : undefined, 
+        team_id: parseInt(equipo.id),
         name: p.strPlayer,
-        // Normalización de posición para tu IA
         position: mapPosition(p.strPosition),
-        // Rating aleatorio entre 70 y 90 (la API no lo da)
         rating: Math.floor(Math.random() * (90 - 70 + 1)) + 70,
         goals: 0,
         assists: 0,
         clean_sheets: 0,
         face_url: p.strThumb || null,
         nationality: p.strNationality || "Spain",
-        country: null // Según tu tabla está como null habitualmente
+        country: null 
       }));
 
-      // 3. Upsert en la tabla 'players'
+      // 3. Upsert corregido para evitar bloqueos
       const { error } = await supabase
         .from("players")
-        .upsert(playersToInsert, { onConflict: 'name, team_id' });
+        .upsert(playersToInsert, { 
+          // Intentamos el conflicto por ID primero, si no, por la combinación nombre/equipo
+          onConflict: 'id' 
+        });
 
       if (error) {
-        summary.push({ team: equipo.name, status: "Error", detail: error.message });
+        // Si falla por restricción de nombre, intentamos upsert por nombre y equipo
+        const { error: retryError } = await supabase
+          .from("players")
+          .upsert(playersToInsert, { onConflict: 'name, team_id' });
+
+        if (retryError) {
+          summary.push({ team: equipo.name, status: "Error", detail: retryError.message });
+        } else {
+          summary.push({ team: equipo.name, status: "Éxito (Actualizado)", count: playersToInsert.length });
+        }
       } else {
         summary.push({ team: equipo.name, status: "Éxito", count: playersToInsert.length });
       }
@@ -68,12 +79,11 @@ export async function GET() {
   }
 }
 
-// Helper para que tu IA entienda las posiciones
 function mapPosition(apiPos: string): string {
   const pos = apiPos.toLowerCase();
   if (pos.includes("goalkeeper")) return "Goalkeeper";
   if (pos.includes("defender") || pos.includes("back")) return "Defender";
   if (pos.includes("midfield")) return "Midfielder";
   if (pos.includes("forward") || pos.includes("striker") || pos.includes("wing")) return "Forward";
-  return "Midfielder"; // Valor por defecto
+  return "Midfielder"; 
 }

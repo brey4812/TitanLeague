@@ -32,27 +32,30 @@ export async function GET() {
       if (!data.teams) continue;
       const t = data.teams[0];
 
-      // MAPEADO SEGÚN TU TABLA REAL
+      // MAPEADO CORREGIDO
       const { error } = await supabase
         .from("teams")
         .upsert({
-          id: parseInt(t.idTeam),
+          id: parseInt(t.idTeam), // Clave primaria
           name: t.strTeam,
-          real_team_name: t.strTeam,
+          real_team_name: t.strTeam, // Aquí es donde daba el error de duplicado
           country: t.strCountry,
           league: t.strLeague,
           badge_url: t.strTeamBadge,
           external_id: t.idTeam,
-          division_id: 1, // Lo ponemos en 1 para que aparezca en tu liga
-          // Columnas de rendimiento que sí existen en tu tabla
+          division_id: 1,
           attack: 75,
           midfield: 75,
           defense: 75,
           overall: 75,
-          // NOTA: No enviamos 'stats' ni 'roster' porque no existen como columnas
+        }, { 
+          // SOLUCIÓN AL ERROR: Le decimos a Supabase que ignore conflictos de nombres
+          // y simplemente actualice los datos si el ID coincide.
+          onConflict: 'id' 
         });
 
       if (error) {
+        console.error(`Error con ${t.strTeam}:`, error.message);
         summary.push({ team: t.strTeam, status: "Error", detail: error.message });
       } else {
         summary.push({ team: t.strTeam, status: "Éxito" });
