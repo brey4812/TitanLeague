@@ -49,7 +49,56 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     refreshData();
   }, [refreshData]);
 
-  // --- GESTIÓN DE EQUIPOS ---
+  // --- NUEVA LÓGICA: GENERACIÓN AUTOMÁTICA DE DUELOS ---
+  // Se dispara cuando detecta 2 equipos con 11 jugadores que no tienen partido
+  const autoMatchmaker = useCallback(async () => {
+    for (const div of divisions) {
+      // Filtramos equipos de esta división que tengan 11 o más jugadores
+      const readyTeams = teams.filter(t => 
+        Number(t.division_id) === div.id && 
+        (t.roster?.length || 0) >= 11
+      );
+      
+      // Si hay al menos 2 equipos listos
+      if (readyTeams.length >= 2) {
+        // Buscamos si el último equipo añadido ya tiene un partido registrado
+        const lastTeam = readyTeams[readyTeams.length - 1];
+        const opponent = readyTeams[readyTeams.length - 2];
+
+        const alreadyHasMatch = matches.some((m: any) => 
+          m.home_team_id === lastTeam.id || m.away_team_id === lastTeam.id ||
+          m.home_team_id === opponent.id || m.away_team_id === opponent.id
+        );
+
+        // Si NO tienen partido, lo creamos automáticamente en Supabase
+        if (!alreadyHasMatch) {
+          const { error } = await supabase.from('matches').insert({
+            home_team_id: opponent.id,
+            away_team_id: lastTeam.id,
+            round: 1,
+            played: false,
+            division_id: div.id,
+            competition: "League"
+          });
+
+          if (!error) {
+            refreshData(); // Recargamos para que aparezca el "VS"
+            toast.info(`Duelo generado: ${opponent.name} vs ${lastTeam.name}`);
+          }
+        }
+      }
+    }
+  }, [teams, matches, refreshData, divisions]);
+
+  // Vigilar cambios en los equipos para emparejar
+  useEffect(() => {
+    if (isLoaded && teams.length >= 2) {
+      autoMatchmaker();
+    }
+  }, [teams, isLoaded, autoMatchmaker]);
+
+
+  // --- GESTIÓN DE EQUIPOS (SIN CAMBIOS) ---
   const addTeam = useCallback((newTeam: Team) => {
     setTeams(prev => {
       if (prev.find(t => String(t.id) === String(newTeam.id))) return prev;
@@ -62,17 +111,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
-  // CORRECCIÓN: Ahora solo sale de la lista visual, NO borra de Supabase
   const deleteTeam = useCallback((id: number | string) => {
-    // Filtramos localmente para que desaparezca de la vista actual
     setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
-    
-    // También lo quitamos de los partidos que se muestran
     setMatches(prev => prev.filter(m => 
       String(m.home_team_id) !== String(id) && 
       String(m.away_team_id) !== String(id)
     ));
-    
     toast.success("Equipo quitado de la lista");
   }, []);
 
@@ -84,7 +128,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     } : t));
   }, []);
 
-  // --- GESTIÓN DE JUGADORES ---
+  // --- GESTIÓN DE JUGADORES (SIN CAMBIOS) ---
   const addPlayerToTeam = useCallback((teamId: number | string, player: Player) => {
     setTeams(prev => prev.map(team => {
       if (String(team.id) === String(teamId)) {
@@ -105,7 +149,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  // --- BÚSQUEDAS Y UTILIDADES ---
+  // --- BÚSQUEDAS Y UTILIDADES (SIN CAMBIOS) ---
   const getTeamById = useCallback((id: number | string) => 
     teams.find(t => String(t.id) === String(id)), [teams]);
   
@@ -119,7 +163,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (confirm("¿Borrar todos los datos de la vista?")) {
       setTeams([]);
       setMatches([]);
-      // Nota: reload() volverá a traer los datos de la DB al reiniciar
     }
   };
 
