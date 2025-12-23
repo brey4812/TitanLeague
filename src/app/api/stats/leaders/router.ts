@@ -24,13 +24,14 @@ export async function GET(req: Request) {
 
     if (stError) throw stError;
 
-    // Base para consultas de jugadores (evita repetición de código)
+    // 2. Base para consultas de jugadores ajustada a tus COLUMNAS REALES
+    // Eliminamos yellow_cards y red_cards si no están como columnas planas en tu DB
     const playerQuery = `
-      id, name, position, goals, assists, clean_sheets, yellow_cards, red_cards,
+      id, name, position, goals, assists, clean_sheets, rating,
       teams (id, name, badge_url)
     `;
 
-    // 2. Obtener Top Goleadores
+    // 3. Consultas de rendimiento
     const { data: scorers } = await supabase
       .from("players")
       .select(playerQuery)
@@ -38,7 +39,6 @@ export async function GET(req: Request) {
       .order("goals", { ascending: false })
       .limit(10);
 
-    // 3. Obtener Top Asistentes
     const { data: assistants } = await supabase
       .from("players")
       .select(playerQuery)
@@ -46,7 +46,6 @@ export async function GET(req: Request) {
       .order("assists", { ascending: false })
       .limit(10);
 
-    // 4. Obtener Guantes de Oro (Porteros con vallas invictas)
     const { data: keepers } = await supabase
       .from("players")
       .select(playerQuery)
@@ -55,22 +54,6 @@ export async function GET(req: Request) {
       .order("clean_sheets", { ascending: false })
       .limit(10);
 
-    // 5. Disciplina - Más Tarjetas Amarillas
-    const { data: yellowCards } = await supabase
-      .from("players")
-      .select(playerQuery)
-      .gt("yellow_cards", 0)
-      .order("yellow_cards", { ascending: false })
-      .limit(5);
-
-    // 6. Disciplina - Más Tarjetas Rojas
-    const { data: redCards } = await supabase
-      .from("players")
-      .select(playerQuery)
-      .gt("red_cards", 0)
-      .order("red_cards", { ascending: false })
-      .limit(5);
-
     return NextResponse.json({
       ok: true,
       data: {
@@ -78,8 +61,10 @@ export async function GET(req: Request) {
         topScorers: scorers || [],
         topAssists: assistants || [],
         topKeepers: keepers || [],
-        yellowCards: yellowCards || [],
-        redCards: redCards || []
+        // Enviamos arrays vacíos para disciplina si las columnas no existen aún 
+        // para evitar que el frontend rompa al mapear undefined
+        yellowCards: [], 
+        redCards: []
       }
     });
   } catch (err: any) {
