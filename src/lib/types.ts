@@ -3,9 +3,9 @@
  */
 
 export interface Player {
-  id: number;
+  id: number | string;
   name: string;
-  position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward'; // Obligatorio para la IA
+  position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward';
   country?: string; 
   face_url?: string; 
   rating: number;
@@ -59,22 +59,25 @@ export interface MatchEvent {
 
 export interface MatchResult {
   id: number | string;
-  season: number;
+  season?: number;
   week: number;
-  // --- PROPIEDADES CORREGIDAS PARA COMPATIBILIDAD CON SUPABASE ---
-  round?: number;
-  home_team?: any;           // Corregido: Coincide con tu columna en DB
-  away_team?: any;           // Corregido: Coincide con tu columna en DB
-  home_goals?: number;
-  away_goals?: number;
-  played?: boolean;
-  division_id?: number;
-  // --- PROPIEDADES FRONTEND ---
-  homeTeamId: number | string;
-  awayTeamId: number | string;
-  homeScore: number;
-  awayScore: number;
-  isImportant: boolean;
+  
+  // --- COLUMNAS REALES DE SUPABASE (Corregidas según tus capturas) ---
+  home_team: number | string;
+  away_team: number | string;
+  home_goals: number;
+  away_goals: number;
+  round?: number; 
+  played: boolean; 
+  division_id: number;
+
+  // --- COMPATIBILIDAD CON LÓGICA FRONTEND (Opcionales para evitar errores) ---
+  homeTeamId?: number | string;
+  awayTeamId?: number | string;
+  homeScore?: number;
+  awayScore?: number;
+  
+  isImportant?: boolean;
   mvpId?: number | string;
   events?: MatchEvent[];
 }
@@ -104,6 +107,5 @@ export interface LeagueContextType {
   getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
   resetLeagueData: () => void;
   importLeagueData: (newData: any) => boolean;
-  // --- FUNCIÓN DE SINCRONIZACIÓN ---
   refreshData: () => Promise<void>;
 }
