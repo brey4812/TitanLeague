@@ -2,7 +2,7 @@
 
 import { createContext, useState, ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Team, Player, MatchResult, Division, LeagueContextType, TeamOfTheWeekPlayer } from "@/lib/types";
+import { Team, Player, MatchResult, Division, LeagueContextType, TeamOfTheWeekPlayer, MatchEvent } from "@/lib/types";
 import { toast } from "sonner";
 
 const supabase = createClient(
@@ -15,8 +15,7 @@ export const LeagueContext = createContext<LeagueContextType>({} as LeagueContex
 export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<MatchResult[]>([]);
-  // Nuevo estado para almacenar los sucesos de los partidos
-  const [matchEvents, setMatchEvents] = useState<any[]>([]);
+  const [matchEvents, setMatchEvents] = useState<MatchEvent[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const divisions: Division[] = [
@@ -31,7 +30,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const savedTeams = localStorage.getItem('league_active_teams');
       if (savedTeams) setTeams(JSON.parse(savedTeams));
 
-      // Cargamos partidos y sucesos en paralelo
       const [matchesRes, eventsRes] = await Promise.all([
         supabase.from('matches').select('*').order('round', { ascending: true }),
         supabase.from('match_events').select('*') 
@@ -48,7 +46,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
-  // --- RECALCULO DE ESTADÍSTICAS (Equipos y Jugadores por sucesos) ---
+  useEffect(() => {
+    if (isLoaded && teams.length > 0) {
+      localStorage.setItem('league_active_teams', JSON.stringify(teams));
+    }
+  }, [teams, isLoaded]);
+
+  // --- RECALCULO DE ESTADÍSTICAS (Línea Corregida) ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -63,23 +67,26 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         const gAg = isHome ? Number(m.away_goals) : Number(m.home_goals);
         
         stats.goalsFor += gFor;
-        stats.goalsAgainst += gAg;
+        stats.goalsAgainst += gAg; // CORRECCIÓN: Eliminado el stats. duplicado
         
         if (gFor > gAg) { stats.wins += 1; stats.points += 3; }
         else if (gFor === gAg) { stats.draws += 1; stats.points += 1; }
         else { stats.losses += 1; }
       });
 
-      // Actualizar jugadores con sus goles/asistencias reales de la tabla de sucesos
       const updatedRoster = (team.roster || []).map(player => {
         const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
         return {
           ...player,
-          goals: playerEvents.filter(e => e.type === 'GOAL').length,
-          assists: playerEvents.filter(e => e.type === 'ASSIST').length,
-          yellowCards: playerEvents.filter(e => e.type === 'YELLOW_CARD').length,
-          redCards: playerEvents.filter(e => e.type === 'RED_CARD').length,
-          // El rating sube ligeramente si el jugador tiene buen rendimiento real
+          stats: {
+            ...player.stats,
+            goals: playerEvents.filter(e => e.type === 'GOAL').length,
+            assists: playerEvents.filter(e => e.type === 'ASSIST').length,
+            cards: {
+                yellow: playerEvents.filter(e => e.type === 'YELLOW_CARD').length,
+                red: playerEvents.filter(e => e.type === 'RED_CARD').length,
+            }
+          },
           rating: player.rating + (playerEvents.filter(e => e.type === 'GOAL').length * 0.1)
         };
       });
@@ -88,7 +95,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
-  // Obtener sucesos de un partido para el Modal
   const getMatchEvents = useCallback((matchId: string | number) => {
     return matchEvents.filter(e => String(e.match_id) === String(matchId))
       .sort((a, b) => a.minute - b.minute);
@@ -98,43 +104,67 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     const players = processedTeams.flatMap(t => (t.roster || []).map(p => ({
       ...p, teamName: t.name, teamLogoUrl: t.badge_url, teamDataAiHint: t.real_team_name
     })));
-    // Ahora el 11 ideal se basa en el rating actualizado por goles/asistencias reales
     return players.sort((a, b) => b.rating - a.rating).slice(0, 11);
   }, [processedTeams]);
 
-  // --- LÓGICA DE EMPAREJAMIENTOS (Se mantiene igual) ---
   const autoMatchmaker = useCallback(async () => {
     if (teams.length < 2 || !isLoaded) return;
+
     for (const div of divisions) {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
+
       const divMatches = matches.filter(m => Number(m.division_id) === div.id);
       const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round))) : 1;
       const pendingInLastRound = divMatches.filter(m => Number(m.round) === lastRound && !m.played);
       const currentWeek = (divMatches.length > 0 && pendingInLastRound.length === 0) ? lastRound + 1 : lastRound;
-      const busyTeamIds = new Set(divMatches.filter(m => Number(m.round) === currentWeek).flatMap(m => [String(m.home_team), String(m.away_team)]));
-      const availableTeams = divTeams.filter(t => !busyTeamIds.has(String(t.id)));
+
+      const localBusyIds = new Set(
+        divMatches.filter(m => Number(m.round) === currentWeek)
+          .flatMap(m => [String(m.home_team), String(m.away_team)])
+      );
+
+      const availableTeams = divTeams.filter(t => !localBusyIds.has(String(t.id)));
+
       if (availableTeams.length >= 2) {
         const shuffled = [...availableTeams].sort(() => Math.random() - 0.5);
         for (let i = 0; i < shuffled.length - 1; i += 2) {
+          const teamA = shuffled[i];
+          const teamB = shuffled[i+1];
+
+          if (localBusyIds.has(String(teamA.id)) || localBusyIds.has(String(teamB.id))) continue;
+
           const { data, error } = await supabase.from('matches').insert({
-            home_team: shuffled[i].id, away_team: shuffled[i+1].id,
-            round: currentWeek, played: false, division_id: div.id,
-            competition: "League", home_goals: 0, away_goals: 0
+            home_team: teamA.id, 
+            away_team: teamB.id,
+            round: currentWeek, 
+            played: false, 
+            division_id: div.id,
+            competition: "League", 
+            home_goals: 0, 
+            away_goals: 0
           }).select();
-          if (!error && data) setMatches(prev => [...prev, data[0]]);
+
+          if (!error && data) {
+            localBusyIds.add(String(teamA.id));
+            localBusyIds.add(String(teamB.id));
+            setMatches(prev => [...prev, data[0]]);
+          }
         }
       }
     }
   }, [teams, matches, divisions, isLoaded]);
 
-  useEffect(() => { if (isLoaded) autoMatchmaker(); }, [matches.length, isLoaded, autoMatchmaker]);
+  useEffect(() => { if (isLoaded) autoMatchmaker(); }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
   const resetLeagueData = useCallback(() => {
     if (confirm("¿Limpiar liga activa?")) {
-      setTeams([]);
       localStorage.removeItem('league_active_teams');
+      setTeams([]);
+      setMatches([]);
+      setMatchEvents([]);
       toast.info("Datos locales reseteados");
+      window.location.reload();
     }
   }, []);
 
@@ -143,7 +173,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       teams: processedTeams,
       divisions,
       matches,
-      matchEvents, // Expuesto para componentes
+      matchEvents,
       players: processedTeams.flatMap(t => t.roster || []),
       isLoaded,
       addTeam: (t) => setTeams(prev => [...prev, t]),
