@@ -50,10 +50,11 @@ export interface Division {
 
 export interface MatchEvent {
   id: number;
-  playerId: number | string;
-  playerName: string;
-  teamId: number | string;
-  type: 'goal' | 'yellow' | 'red';
+  match_id: number | string; // Añadido para vincular con el partido
+  player_id: number | string; // Cambiado a player_id para coincidir con tu DB
+  playerName?: string;
+  team_id?: number | string; // Cambiado a team_id
+  type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST'; // Tipos normalizados
   minute: number;
 }
 
@@ -61,8 +62,6 @@ export interface MatchResult {
   id: number | string;
   season?: number;
   week: number;
-  
-  // --- COLUMNAS REALES DE SUPABASE (Corregidas según tus capturas) ---
   home_team: number | string;
   away_team: number | string;
   home_goals: number;
@@ -70,13 +69,10 @@ export interface MatchResult {
   round?: number; 
   played: boolean; 
   division_id: number;
-
-  // --- COMPATIBILIDAD CON LÓGICA FRONTEND (Opcionales para evitar errores) ---
   homeTeamId?: number | string;
   awayTeamId?: number | string;
   homeScore?: number;
   awayScore?: number;
-  
   isImportant?: boolean;
   mvpId?: number | string;
   events?: MatchEvent[];
@@ -92,6 +88,7 @@ export interface LeagueContextType {
   teams: Team[];
   divisions: Division[];
   matches: MatchResult[];
+  matchEvents: MatchEvent[]; // CORRECCIÓN: Añadido al contexto
   players: Player[];
   isLoaded: boolean;
   addTeam: (team: Team) => void;
@@ -103,6 +100,7 @@ export interface LeagueContextType {
   getPlayerById: (id: number | string) => Player | undefined;
   getTeamByPlayerId: (playerId: number | string) => Team | undefined;
   simulateMatchday: () => void;
+  getMatchEvents: (matchId: string | number) => MatchEvent[]; // CORRECCIÓN: Añadido
   getTeamOfTheWeek: (week: number) => TeamOfTheWeekPlayer[];
   getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
   resetLeagueData: () => void;
