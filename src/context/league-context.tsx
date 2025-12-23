@@ -3,7 +3,7 @@
 import { createContext, useState, ReactNode, useCallback, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Team, Player, MatchResult, Division, LeagueContextType } from "@/lib/types";
-import { toast } from "sonner"; // <--- ESTA ES LA IMPORTACIÓN QUE FALTA
+import { toast } from "sonner";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,7 +24,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     { id: 4, name: "Cuarta División" }
   ];
 
-  // --- CARGA DE DATOS DESDE SUPABASE ---
+  // --- CARGA DE DATOS ---
   const refreshData = useCallback(async () => {
     try {
       const { data: teamsData } = await supabase
@@ -49,7 +49,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     refreshData();
   }, [refreshData]);
 
-  // --- GESTIÓN DE EQUIPOS (RESTAURADA AL 100%) ---
+  // --- GESTIÓN DE EQUIPOS ---
   const addTeam = useCallback((newTeam: Team) => {
     setTeams(prev => {
       if (prev.find(t => String(t.id) === String(newTeam.id))) return prev;
@@ -62,19 +62,18 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
-  const deleteTeam = useCallback(async (id: number | string) => {
-    try {
-      const { error } = await supabase.from('teams').delete().eq('id', id);
-      
-      if (error) throw error;
-
-      setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
-      setMatches(prev => prev.filter(m => String(m.home_team_id) !== String(id) && String(m.away_team_id) !== String(id)));
-      
-      toast.success("Equipo eliminado correctamente"); // <--- Ahora funcionará
-    } catch (error: any) {
-      toast.error("Error al eliminar: " + error.message);
-    }
+  // CORRECCIÓN: Ahora solo sale de la lista visual, NO borra de Supabase
+  const deleteTeam = useCallback((id: number | string) => {
+    // Filtramos localmente para que desaparezca de la vista actual
+    setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
+    
+    // También lo quitamos de los partidos que se muestran
+    setMatches(prev => prev.filter(m => 
+      String(m.home_team_id) !== String(id) && 
+      String(m.away_team_id) !== String(id)
+    ));
+    
+    toast.success("Equipo quitado de la lista");
   }, []);
 
   const updateTeam = useCallback((updated: Team) => {
@@ -85,7 +84,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     } : t));
   }, []);
 
-  // --- GESTIÓN DE JUGADORES (RESTAURADA AL 100%) ---
+  // --- GESTIÓN DE JUGADORES ---
   const addPlayerToTeam = useCallback((teamId: number | string, player: Player) => {
     setTeams(prev => prev.map(team => {
       if (String(team.id) === String(teamId)) {
@@ -117,10 +116,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     teams.find(t => t.roster.some(p => String(p.id) === String(pid))), [teams]);
 
   const resetLeagueData = () => {
-    if (confirm("¿Borrar todos los datos de la liga?")) {
+    if (confirm("¿Borrar todos los datos de la vista?")) {
       setTeams([]);
       setMatches([]);
-      window.location.reload();
+      // Nota: reload() volverá a traer los datos de la DB al reiniciar
     }
   };
 
