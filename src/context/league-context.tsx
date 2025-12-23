@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useState, ReactNode, useCallback, useEffect } from "react";
-import { Team, Player, MatchResult, MatchEvent, TeamOfTheWeekPlayer, Division, LeagueContextType } from "@/lib/types";
+import { Team, Player, MatchResult, TeamOfTheWeekPlayer, Division, LeagueContextType } from "@/lib/types";
 
+// Asegúrate de que LeagueContextType incluya: importLeagueData: (data: any) => void;
 export const LeagueContext = createContext<LeagueContextType>({} as LeagueContextType);
 
 export const LeagueProvider = ({ children }: { children: ReactNode }) => {
@@ -21,7 +22,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const savedTeams = localStorage.getItem('league_teams');
     const savedMatches = localStorage.getItem('league_matches');
-    if (savedTeams) setTeams(JSON.parse(savedTeams));
+    
+    if (savedTeams) {
+      setTeams(JSON.parse(savedTeams));
+    } else {
+      setTeams([]); 
+    }
+    
     if (savedMatches) setMatches(JSON.parse(savedMatches));
     setIsLoaded(true);
   }, []);
@@ -35,57 +42,99 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   // --- GESTIÓN DE EQUIPOS ---
   const addTeam = useCallback((newTeam: Team) => {
-    setTeams(prev => [...prev, { ...newTeam, roster: newTeam.roster || [] }]);
+    setTeams(prev => {
+      if (prev.find(t => String(t.id) === String(newTeam.id))) return prev;
+      
+      const formattedTeam = {
+        ...newTeam,
+        badge_url: newTeam.badge_url || (newTeam as any).logo || '/placeholder-team.png',
+        logo: newTeam.badge_url || (newTeam as any).logo || '/placeholder-team.png',
+        roster: (newTeam.roster || []).slice(0, 20)
+      };
+      return [...prev, formattedTeam];
+    });
   }, []);
 
-  const deleteTeam = useCallback((id: number) => {
-    setTeams(prev => prev.filter(t => t.id !== id));
-    setMatches(prev => prev.filter(m => m.homeTeamId !== id && m.awayTeamId !== id));
+  const deleteTeam = useCallback((id: number | string) => {
+    setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
+    setMatches(prev => prev.filter(m => String(m.homeTeamId) !== String(id) && String(m.awayTeamId) !== String(id)));
   }, []);
 
   const updateTeam = useCallback((updated: Team) => {
-    setTeams(prev => prev.map(t => t.id === updated.id ? updated : t));
+    setTeams(prev => prev.map(t => String(t.id) === String(updated.id) ? {
+      ...updated,
+      badge_url: updated.badge_url || (updated as any).logo || '/placeholder-team.png',
+      logo: updated.badge_url || (updated as any).logo || '/placeholder-team.png',
+      roster: updated.roster.slice(0, 20)
+    } : t));
   }, []);
 
-  // --- GESTIÓN DE JUGADORES (Límite 20) ---
-  const addPlayerToTeam = useCallback((teamId: number, player: Player) => {
+  // --- NUEVO: IMPORTAR DATOS ---
+  const importLeagueData = useCallback((newData: any) => {
+    try {
+      if (!newData.teams) throw new Error("Formato inválido");
+
+      const formattedTeams = newData.teams.map((t: any) => ({
+        ...t,
+        badge_url: t.badge_url || t.logo || '/placeholder-team.png',
+        logo: t.badge_url || t.logo || '/placeholder-team.png',
+        roster: (t.roster || []).slice(0, 20)
+      }));
+
+      setTeams(formattedTeams);
+      setMatches(newData.matches || []);
+      
+      // Feedback visual se maneja en el componente (Toast)
+      return true;
+    } catch (error) {
+      console.error("Error importando:", error);
+      return false;
+    }
+  }, []);
+
+  // --- GESTIÓN DE JUGADORES ---
+  const addPlayerToTeam = useCallback((teamId: number | string, player: Player) => {
     setTeams(prev => prev.map(team => {
-      if (team.id === teamId) {
-        if (team.roster.length >= 20) return team; // Bloqueo de límite
+      if (String(team.id) === String(teamId)) {
+        if (team.roster.length >= 20) return team; 
+        if (team.roster.some(p => String(p.id) === String(player.id))) return team;
         return { ...team, roster: [...team.roster, player] };
       }
       return team;
     }));
   }, []);
 
-  const removePlayerFromTeam = useCallback((teamId: number, playerId: number) => {
+  const removePlayerFromTeam = useCallback((teamId: number | string, playerId: number | string) => {
     setTeams(prev => prev.map(team => {
-      if (team.id === teamId) {
-        return { ...team, roster: team.roster.filter(p => p.id !== playerId) };
+      if (String(team.id) === String(teamId)) {
+        return { ...team, roster: team.roster.filter(p => String(p.id) !== String(playerId)) };
       }
       return team;
     }));
   }, []);
 
   // --- BÚSQUEDAS ---
-  const getTeamById = useCallback((id: number) => teams.find(t => t.id === id), [teams]);
-  const getPlayerById = useCallback((id: number) => 
-    teams.flatMap(t => t.roster).find(p => p.id === id), [teams]);
-  const getTeamByPlayerId = useCallback((pid: number) => 
-    teams.find(t => t.roster.some(p => p.id === pid)), [teams]);
+  const getTeamById = useCallback((id: number | string) => 
+    teams.find(t => String(t.id) === String(id)), [teams]);
+  
+  const getPlayerById = useCallback((id: number | string) => 
+    teams.flatMap(t => t.roster).find(p => String(p.id) === String(id)), [teams]);
 
-  // --- SIMULACIÓN Y SANCIONES (2 Amarillas = Suspensión) ---
-  const simulateMatchday = useCallback(() => {
-    // Lógica para generar resultados y eventos detallados
-    // Aquí se aplicarían las sanciones de la jornada anterior analizando MatchEvents
-  }, [teams, matches]);
+  const getTeamByPlayerId = useCallback((pid: number | string) => 
+    teams.find(t => t.roster.some(p => String(p.id) === String(pid))), [teams]);
 
+  const simulateMatchday = useCallback(() => {}, [teams, matches]);
   const getBestEleven = useCallback((type: string, val?: number) => [] as TeamOfTheWeekPlayer[], []);
   const getTeamOfTheWeek = (week: number) => getBestEleven("week", week);
 
   const resetLeagueData = () => {
-    localStorage.clear();
-    window.location.reload();
+    if (confirm("¿Seguro que quieres borrar todos los datos de la liga?")) {
+      localStorage.removeItem('league_teams');
+      localStorage.removeItem('league_matches');
+      setTeams([]);
+      setMatches([]);
+      window.location.reload();
+    }
   };
 
   return (
@@ -106,7 +155,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       simulateMatchday,
       getTeamOfTheWeek,
       getBestEleven,
-      resetLeagueData
+      resetLeagueData,
+      importLeagueData // <--- Añadido aquí
     }}>
       {children}
     </LeagueContext.Provider>

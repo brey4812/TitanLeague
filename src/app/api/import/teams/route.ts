@@ -6,7 +6,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Ligas europeas que quieres importar
 const LEAGUES = [
   { name: "Spanish La Liga", query: "Spanish La Liga" },
   { name: "English Premier League", query: "English Premier League" },
@@ -18,14 +17,7 @@ const LEAGUES = [
 ];
 
 export async function GET() {
-  const apiKey = process.env.THESPORTSDB_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { ok: false, error: "Missing THESPORTSDB_API_KEY" },
-      { status: 500 }
-    );
-  }
+  const apiKey = process.env.THESPORTSDB_API_KEY || "1";
 
   let inserted = 0;
   let updated = 0;
@@ -45,30 +37,31 @@ export async function GET() {
       continue;
     }
 
-    for (const t of data.teams.slice(0, 10)) {
+    for (const t of data.teams) {
       const { error } = await supabase.from("teams").upsert(
         {
-          name: t.strTeam,              // obligatorio (NO NULL)
-          real_team_name: t.strTeam,    // nombre real
-          external_id: t.idTeam,        // id TheSportsDB
-          badge_url: t.strBadge,        // escudo
+          name: t.strTeam,
+          real_team_name: t.strTeam,
+          external_id: t.idTeam,
+          badge_url: t.strBadge,
           country: t.strCountry ?? null,
+          league: league.name,
         },
         {
-          onConflict: "real_team_name",
+          onConflict: "external_id",
         }
       );
 
       if (error) {
         details.push({ team: t.strTeam, error: error.message });
       } else {
-        inserted++; // Supabase decide si es insert o update
+        inserted++;
       }
     }
 
     details.push({
       league: league.name,
-      teams: Math.min(data.teams.length, 10),
+      teams: data.teams.length,
     });
   }
 

@@ -16,7 +16,13 @@ export async function generateStatsAction() {
 export async function generatePressNotes(input: GeneratePressNotesInput) {
     try {
         const result = await generatePressNotesFlow(input);
-        return { success: true, data: result };
+        // Ajustamos para que el objeto devuelto tenga la estructura que el Dashboard busca
+        return { 
+          success: true, 
+          data: {
+            pressNotes: result.pressNotes || (result as any) 
+          } 
+        };
     } catch (error) {
         console.error(error);
         return { success: false, message: "Failed to generate press notes." };

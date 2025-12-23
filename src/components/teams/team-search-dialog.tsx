@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { LeagueContext } from "@/context/league-context";
 import { Search, Globe, PlusCircle, Loader2 } from "lucide-react";
 
+// Configuración de Supabase
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!, 
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -28,7 +29,7 @@ export function TeamSearchDialog({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState<string | null>(null); // Nuevo: estado para carga de importación
+  const [importing, setImporting] = useState<string | number | null>(null);
   const { addTeam } = useContext(LeagueContext);
 
   const handleSearch = async (term: string) => {
@@ -54,21 +55,21 @@ export function TeamSearchDialog({
   const handleImport = async (dbTeam: any) => {
     setImporting(dbTeam.id);
     
-    // 1. Buscamos los jugadores asociados a este equipo en la DB
+    // 1. Buscamos automáticamente los jugadores asociados a este equipo en la base de datos
     const { data: playersData, error: playersError } = await supabase
       .from('players')
       .select('*')
       .eq('team_id', dbTeam.id)
-      .limit(20); // Respetamos tu límite de 20
+      .limit(20); // Respetamos tu límite de 20 jugadores
 
     if (playersError) {
-      console.error("Error cargando jugadores:", playersError);
+      console.error("Error cargando jugadores de la DB:", playersError);
     }
 
-    // 2. Adaptamos los datos al estado de la liga
+    // 2. Adaptamos los datos de la DB al estado de la liga local
     const formattedTeam = {
       ...dbTeam,
-      // Priorizamos badge_url de la DB, luego logo, si no hay, placeholder
+      // Prioridad absoluta a badge_url para que no salga la imagen rota
       badge_url: dbTeam.badge_url || dbTeam.logo || '/placeholder-team.png',
       stats: {
         wins: 0,
@@ -77,13 +78,14 @@ export function TeamSearchDialog({
         goalsFor: 0,
         goalsAgainst: 0
       },
-      // 3. Mapeamos los jugadores encontrados o array vacío si no hay
+      // 3. Mapeamos los jugadores encontrados o array vacío
       roster: playersData ? playersData.map(p => ({
         id: p.id,
         name: p.name,
-        position: p.position || 'Desconocido',
-        overall: p.overall || 60,
-        image_url: p.image_url || null // La imagen del jugador es opcional
+        nationality: p.nationality || "Desconocida",
+        position: p.position || 'Midfielder',
+        overall: p.overall || p.rating || 60,
+        image_url: p.image_url || null // Imagen opcional para jugadores
       })) : []
     };
 
@@ -137,7 +139,7 @@ export function TeamSearchDialog({
                     <div className="overflow-hidden">
                       <p className="text-sm font-bold truncate text-slate-900 leading-tight">{t.name}</p>
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1 uppercase font-semibold">
-                        <Globe className="h-2.5 w-2.5" /> {t.country || 'Sin País'} • {t.league || 'Sin Liga'}
+                        <Globe className="h-2.5 w-2.5" /> {t.country || 'Sin País'}
                       </p>
                     </div>
                   </div>
@@ -152,7 +154,7 @@ export function TeamSearchDialog({
                     ) : (
                       <PlusCircle className="h-3.5 w-3.5" />
                     )}
-                    {importing === t.id ? 'Cargando...' : 'Importar'}
+                    {importing === t.id ? 'Importando...' : 'Importar'}
                   </Button>
                 </div>
               ))
