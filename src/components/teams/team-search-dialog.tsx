@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { LeagueContext } from "@/context/league-context";
 import { Search, Globe, PlusCircle, Loader2 } from "lucide-react";
 
-// Configuración de Supabase
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!, 
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -29,6 +28,7 @@ export function TeamSearchDialog({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState<string | null>(null); // Nuevo: estado para carga de importación
   const { addTeam } = useContext(LeagueContext);
 
   const handleSearch = async (term: string) => {
@@ -51,10 +51,24 @@ export function TeamSearchDialog({
     setLoading(false);
   };
 
-  const handleImport = (dbTeam: any) => {
-    // Adaptamos los datos de la DB al estado de la liga
+  const handleImport = async (dbTeam: any) => {
+    setImporting(dbTeam.id);
+    
+    // 1. Buscamos los jugadores asociados a este equipo en la DB
+    const { data: playersData, error: playersError } = await supabase
+      .from('players')
+      .select('*')
+      .eq('team_id', dbTeam.id)
+      .limit(20); // Respetamos tu límite de 20
+
+    if (playersError) {
+      console.error("Error cargando jugadores:", playersError);
+    }
+
+    // 2. Adaptamos los datos al estado de la liga
     const formattedTeam = {
       ...dbTeam,
+      // Priorizamos badge_url de la DB, luego logo, si no hay, placeholder
       badge_url: dbTeam.badge_url || dbTeam.logo || '/placeholder-team.png',
       stats: {
         wins: 0,
@@ -63,10 +77,18 @@ export function TeamSearchDialog({
         goalsFor: 0,
         goalsAgainst: 0
       },
-      roster: [] 
+      // 3. Mapeamos los jugadores encontrados o array vacío si no hay
+      roster: playersData ? playersData.map(p => ({
+        id: p.id,
+        name: p.name,
+        position: p.position || 'Desconocido',
+        overall: p.overall || 60,
+        image_url: p.image_url || null // La imagen del jugador es opcional
+      })) : []
     };
 
     addTeam(formattedTeam);
+    setImporting(null);
     onOpenChange(false); 
     setQuery("");
     setResults([]);
@@ -108,23 +130,29 @@ export function TeamSearchDialog({
                     <div className="relative h-12 w-12 bg-white rounded-lg border p-1 shadow-sm flex items-center justify-center">
                       <img 
                         src={t.badge_url || t.logo || '/placeholder-team.png'} 
-                        alt="" 
+                        alt={t.name} 
                         className="object-contain max-h-full max-w-full" 
                       />
                     </div>
                     <div className="overflow-hidden">
                       <p className="text-sm font-bold truncate text-slate-900 leading-tight">{t.name}</p>
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1 uppercase font-semibold">
-                        <Globe className="h-2.5 w-2.5" /> {t.country} • {t.league}
+                        <Globe className="h-2.5 w-2.5" /> {t.country || 'Sin País'} • {t.league || 'Sin Liga'}
                       </p>
                     </div>
                   </div>
                   <Button 
                     size="sm" 
+                    disabled={importing === t.id}
                     onClick={() => handleImport(t)} 
                     className="gap-1 h-8 bg-blue-600 hover:bg-blue-700"
                   >
-                    <PlusCircle className="h-3.5 w-3.5" /> Importar
+                    {importing === t.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <PlusCircle className="h-3.5 w-3.5" />
+                    )}
+                    {importing === t.id ? 'Cargando...' : 'Importar'}
                   </Button>
                 </div>
               ))

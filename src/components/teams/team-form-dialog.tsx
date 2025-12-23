@@ -5,205 +5,115 @@ import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Team, Division, Player } from '@/lib/types';
-import { Trash2 } from 'lucide-react';
+import { Trash2, UserPlus } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 
 const playerSchema = z.object({
-  id: z.number(),
-  name: z.string().min(1, 'El nombre es requerido'),
-  nationality: z.string().min(1, 'La nacionalidad es requerida'),
+  id: z.union([z.number(), z.string()]),
+  name: z.string().min(1, 'Requerido'),
+  nationality: z.string().min(1, 'Requerido'),
   position: z.enum(['Goalkeeper', 'Defender', 'Midfielder', 'Forward']),
+  image_url: z.string().optional().nullable(),
+  rating: z.number().default(70),
   stats: z.object({
-    goals: z.number(),
-    assists: z.number(),
-    cleanSheets: z.number(),
-    cards: z.object({ yellow: z.number(), red: z.number() }),
-    mvp: z.number(),
+    goals: z.number().default(0), assists: z.number().default(0), cleanSheets: z.number().default(0),
+    cards: z.object({ yellow: z.number().default(0), red: z.number().default(0) }), mvp: z.number().default(0),
   }),
 });
 
 const formSchema = z.object({
-  name: z.string().min(1, 'El nombre es requerido'),
-  division: z.coerce.number().min(1, 'La división es requerida'),
-  logoUrl: z.string().url('Debe ser una URL de imagen válida'),
+  name: z.string().min(1, 'Requerido'),
+  country: z.string().min(1, 'Requerido'),
+  division: z.coerce.number().min(1, 'Requerido'),
+  badge_url: z.string().optional(),
   roster: z.array(playerSchema),
 });
 
 type TeamFormData = z.infer<typeof formSchema>;
 
-interface TeamFormDialogProps {
-  isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
-  onSave: (team: Team) => void;
-  team: Team | null;
-  divisions: Omit<Division, 'teams'>[];
-}
-
-export function TeamFormDialog({ isOpen, onOpenChange, onSave, team, divisions }: TeamFormDialogProps) {
+export function TeamFormDialog({ isOpen, onOpenChange, onSave, team, divisions }: any) {
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<TeamFormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: '',
-      division: undefined,
-      logoUrl: '',
-      roster: [],
-    },
+    defaultValues: { name: '', country: '', division: undefined, badge_url: '', roster: [] },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: 'roster',
-  });
+  const { fields, append, remove } = useFieldArray({ control, name: 'roster' });
 
   useEffect(() => {
     if (isOpen) {
-        if (team) {
-            reset({
-                name: team.name,
-                division: team.division,
-                logoUrl: team.logoUrl,
-                roster: team.roster || [],
-            });
-        } else {
-            reset({
-                name: '',
-                division: undefined,
-                logoUrl: `https://picsum.photos/seed/${Date.now()}/100/100`,
-                roster: [],
-            });
-        }
+      if (team) {
+        reset({
+          name: team.name,
+          country: team.country || '',
+          division: team.division ? Number(team.division) : undefined,
+          badge_url: team.badge_url || (team as any).logo || '',
+          roster: team.roster || [],
+        } as any);
+      } else {
+        reset({ name: '', country: '', division: undefined, badge_url: '', roster: [] });
+      }
     }
   }, [team, reset, isOpen]);
 
   const onSubmit = (data: TeamFormData) => {
-    const division = divisions.find(d => d.id === data.division);
-    if (!division) return;
-
-    const teamToSave: Team = {
-      ...(team || {} as Omit<Team, 'id' | 'roster' | 'divisionName' | 'dataAiHint' | 'stats'>),
+    const div = divisions.find((d: any) => Number(d.id) === Number(data.division));
+    const teamToSave = {
+      ...team,
       id: team?.id || Date.now(),
       name: data.name,
-      division: data.division,
-      divisionName: division.name,
-      logoUrl: data.logoUrl,
-      dataAiHint: team?.dataAiHint || 'custom logo',
+      country: data.country,
+      division: Number(data.division),
+      divisionName: div?.name || 'Sin División',
+      badge_url: data.badge_url || '/placeholder-team.png',
+      logo: data.badge_url || '/placeholder-team.png',
       stats: team?.stats || { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
-      roster: data.roster,
-    };
+      roster: data.roster as Player[],
+    } as Team;
+
     onSave(teamToSave);
+    onOpenChange(false);
   };
-  
-  const addNewPlayer = () => {
-    append({
-        id: Date.now() + Math.random(), // Temporary unique ID
-        name: 'Nuevo Jugador',
-        nationality: 'Desconocida',
-        position: 'Forward',
-        stats: { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 }
-    });
-  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{team ? 'Gestionar Equipo' : 'Añadir Nuevo Equipo'}</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader><DialogTitle>{team ? 'Editar Equipo' : 'Nuevo Equipo'}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
-            <ScrollArea className="max-h-[60vh] p-1">
-                <div className="grid gap-4 py-4 pr-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="name" className="text-right">
-                        Nombre
-                        </Label>
-                        <div className="col-span-3">
-                        <Input id="name" {...register('name')} />
-                        {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="division" className="text-right">
-                        División
-                        </Label>
-                        <div className="col-span-3">
-                        <Controller
-                            name="division"
-                            control={control}
-                            render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value ? String(field.value) : undefined}>
-                                <SelectTrigger>
-                                <SelectValue placeholder="Selecciona una división" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                {divisions.map((d) => (
-                                    <SelectItem key={d.id} value={String(d.id)}>
-                                    {d.name}
-                                    </SelectItem>
-                                ))}
-                                </SelectContent>
-                            </Select>
-                            )}
-                        />
-                        {errors.division && <p className="text-red-500 text-xs mt-1">{errors.division.message}</p>}
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="logoUrl" className="text-right">
-                        URL del Logo
-                        </Label>
-                        <div className="col-span-3">
-                        <Input id="logoUrl" {...register('logoUrl')} />
-                        {errors.logoUrl && <p className="text-red-500 text-xs mt-1">{errors.logoUrl.message}</p>}
-                        </div>
-                    </div>
-
-                    {team && (
-                        <>
-                        <div className="col-span-4">
-                            <h4 className="font-medium mt-4 mb-2">Plantilla de Jugadores</h4>
-                        </div>
-                        {fields.map((player, index) => (
-                        <div key={player.id} className="grid grid-cols-12 items-center gap-2 col-span-4">
-                            <div className="col-span-5">
-                                <Input placeholder="Nombre del jugador" {...register(`roster.${index}.name`)} />
-                            </div>
-                            <div className="col-span-5">
-                                <Input placeholder="Nacionalidad" {...register(`roster.${index}.nationality`)} />
-                            </div>
-                            <div className="col-span-2">
-                                <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)}>
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-                        ))}
-                         <div className="col-span-4 mt-2">
-                            <Button type="button" variant="outline" onClick={addNewPlayer} className="w-full">
-                                Añadir Jugador
-                            </Button>
-                        </div>
-                        </>
-                    )}
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div><Label>Nombre</Label><Input {...register('name')} /></div>
+                <div><Label>País</Label><Input {...register('country')} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><Label>División</Label>
+                  <Controller name="division" control={control} render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value ? String(field.value) : undefined}>
+                      <SelectTrigger><SelectValue placeholder="Selecciona..." /></SelectTrigger>
+                      <SelectContent>{divisions.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  )} />
                 </div>
-            </ScrollArea>
-          <DialogFooter className='mt-4'>
-            <DialogClose asChild>
-              <Button type="button" variant="secondary">Cancelar</Button>
-            </DialogClose>
-            <Button type="submit">Guardar Cambios</Button>
-          </DialogFooter>
+                <div><Label>URL Logo</Label><Input {...register('badge_url')} /></div>
+              </div>
+              <div className="flex justify-between items-center border-t pt-4">
+                <p className="font-bold text-sm">Plantilla ({fields.length}/20)</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => append({ id: Date.now(), name: '', nationality: '', position: 'Midfielder', rating: 70, stats: { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 } })} disabled={fields.length >= 20}><UserPlus className="h-4 w-4 mr-2" /> Añadir</Button>
+              </div>
+              {fields.map((p, i) => (
+                <div key={p.id} className="flex gap-2 bg-slate-50 p-2 rounded-lg border">
+                  <Input placeholder="Nombre" {...register(`roster.${i}.name`)} className="flex-1" />
+                  <Button type="button" variant="ghost" onClick={() => remove(i)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          <DialogFooter className="mt-4"><Button type="submit">Guardar Cambios</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
