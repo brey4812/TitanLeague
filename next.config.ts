@@ -1,4 +1,4 @@
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -25,6 +25,19 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'picsum.photos',
+        port: '',
+        pathname: '/**',
+      },
+      // --- AÑADIMOS ESTE PATRÓN PARA THE SPORTS DB ---
+      {
+        protocol: 'https',
+        hostname: 'r2.thesportsdb.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.thesportsdb.com',
         port: '',
         pathname: '/**',
       },
