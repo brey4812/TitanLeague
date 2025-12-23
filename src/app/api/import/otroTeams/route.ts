@@ -6,10 +6,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const LEAGUES = [
-  { name: "Spanish La Liga", query: "Spanish La Liga" },
-];
-
+// Lista de IDs reales de TheSportsDB para la Primera División Española
 const FORCED_TEAMS = [
   { id: "133738", league: "Spanish La Liga", name: "Real Madrid" },
   { id: "133739", league: "Spanish La Liga", name: "Barcelona" },
@@ -33,63 +30,53 @@ const FORCED_TEAMS = [
   { id: "134710", league: "Spanish La Liga", name: "Leganés" }
 ];
 
-export async function GET() {
-  const apiKey = process.env.THESPORTSDB_API_KEY || "1";
-  let inserted = 0;
+export async function POST() {
+  try {
+    const results = [];
 
-  // 🔹 1. Importación normal (los 10 que da la API)
-  for (const league of LEAGUES) {
-    const res = await fetch(
-      `https://www.thesportsdb.com/api/v1/json/${apiKey}/search_all_teams.php?l=${encodeURIComponent(
-        league.query
-      )}`
-    );
-
-    const data = await res.json();
-    if (!data?.teams) continue;
-
-    for (const t of data.teams) {
-      await supabase.from("teams").upsert(
-        {
-          name: t.strTeam,
-          real_team_name: t.strTeam,
-          external_id: t.idTeam,
-          badge_url: t.strBadge,
-          country: t.strCountry,
-          league: league.name,
-        },
-        { onConflict: "external_id" }
+    for (const teamInfo of FORCED_TEAMS) {
+      // 1. Llamada a la API externa de TheSportsDB
+      const response = await fetch(
+        `https://www.thesportsdb.com/api/v1/json/3/lookupteam.php?id=${teamInfo.id}`
       );
-      inserted++;
+      const data = await response.json();
+      const externalTeam = data.teams[0];
+
+      if (!externalTeam) continue;
+
+      // 2. Mapeo al formato de nuestra base de datos
+      const teamData = {
+        external_id: externalTeam.idTeam,
+        name: externalTeam.strTeam,
+        real_team_name: externalTeam.strTeam,
+        badge_url: externalTeam.strBadge,
+        country: externalTeam.strCountry,
+        league: teamInfo.league,
+        division_id: 1, // Forzamos Primera División
+        attack: 75,
+        midfield: 75,
+        defense: 75,
+        overall: 75,
+        stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 }
+      };
+
+      // 3. Upsert en Supabase (inserta o actualiza si ya existe)
+      const { data: upsertedData, error } = await supabase
+        .from("teams")
+        .upsert(teamData, { onConflict: 'external_id' })
+        .select();
+
+      if (error) throw error;
+      results.push(upsertedData[0]);
     }
+
+    return NextResponse.json({
+      ok: true,
+      message: `${results.length} equipos sincronizados correctamente.`,
+      data: results
+    });
+
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
-
-  // 🔹 2. Importación FORZADA (equipos grandes)
-  for (const team of FORCED_TEAMS) {
-    const res = await fetch(
-      `https://www.thesportsdb.com/api/v1/json/${apiKey}/lookupteam.php?id=${team.id}`
-    );
-    const data = await res.json();
-    if (!data?.teams?.[0]) continue;
-
-    const t = data.teams[0];
-
-    await supabase.from("teams").upsert(
-      {
-        name: t.strTeam,
-        real_team_name: t.strTeam,
-        external_id: t.idTeam,
-        badge_url: t.strBadge,
-        country: t.strCountry,
-        league: team.league,
-      },
-      { onConflict: "external_id" }
-    );
-    inserted++;
-  }
-
-  return NextResponse.json({
-    ok: true,
-    inserted,
-  });
 }
