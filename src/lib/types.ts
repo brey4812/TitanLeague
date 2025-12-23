@@ -6,9 +6,10 @@
 export interface Player {
   id: number;
   name: string;
-  nationality: string;
+  nationality: string; // Nacionalidad (manual o de DB)
   position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward';
   rating: number; 
+  image_url?: string; // URL opcional de la foto del personaje
   stats: {
     goals: number;
     assists: number;
@@ -24,9 +25,9 @@ export interface Player {
 export interface Team {
   id: number;
   name: string;
-  country: string;
+  country: string; // País del equipo
   logo?: string;
-  badge_url: string;
+  badge_url: string; // URL del escudo
   overall: number;
   attack: number;
   midfield: number;
@@ -43,7 +44,7 @@ export interface Team {
     goalsFor: number;
     goalsAgainst: number;
   };
-  roster: Player[];
+  roster: Player[]; // Máximo 20 jugadores
 }
 
 export interface Division {
@@ -73,7 +74,7 @@ export interface MatchResult {
   awayScore: number;
   isImportant: boolean;
   mvpId?: number;
-  events?: MatchEvent[]; // Para ver goles y tarjetas al hacer click
+  events?: MatchEvent[]; // Goles, tarjetas y minutos
 }
 
 export interface TeamOfTheWeekPlayer extends Player {
@@ -94,6 +95,9 @@ export interface LeagueContextType {
   addTeam: (team: Team) => void;
   deleteTeam: (id: number) => void;
   updateTeam: (team: Team) => void;
+  // Funciones añadidas para gestionar el Roster de 20 jugadores
+  addPlayerToTeam: (teamId: number, player: Player) => void;
+  removePlayerFromTeam: (teamId: number, playerId: number) => void;
   getTeamById: (id: number) => Team | undefined;
   getPlayerById: (id: number) => Player | undefined;
   getTeamByPlayerId: (playerId: number) => Team | undefined;
