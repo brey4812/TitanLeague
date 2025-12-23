@@ -13,11 +13,10 @@ export function DashboardClient() {
   const { matches, divisions, getTeamById, isLoaded, refreshData } = useContext(LeagueContext);
   const [isPending, startTransition] = useTransition();
   
-  // Estados para controlar el filtrado
   const [displayedDivision, setDisplayedDivision] = useState<string>("1");
   const [displayedWeek, setDisplayedWeek] = useState(1);
 
-  // Filtrar partidos por división y jornada
+  // Filtrado estricto por división y jornada
   const filteredMatches = useMemo(() => {
     const divId = parseInt(displayedDivision);
     return matches.filter((m: any) => 
@@ -26,13 +25,12 @@ export function DashboardClient() {
     );
   }, [matches, displayedDivision, displayedWeek]);
 
-  // BLOQUEO: Verificar si todos los partidos de la jornada actual están jugados
+  // BLOQUEO: Solo permite avanzar si la jornada actual está simulada al 100%
   const isWeekFinished = useMemo(() => {
     if (filteredMatches.length === 0) return false;
     return filteredMatches.every((m: any) => m.played === true);
   }, [filteredMatches]);
 
-  // Función para simular la jornada actual de la división seleccionada
   const handleSimulateMatchday = async () => {
     startTransition(async () => {
       try {
@@ -49,14 +47,13 @@ export function DashboardClient() {
         if (!result.ok) throw new Error(result.error || "Error al simular");
         
         toast.success("Jornada simulada con éxito");
-        await refreshData();
+        await refreshData(); // Obliga al contexto a generar la siguiente jornada
       } catch (error: any) {
         toast.error(error.message);
       }
     });
   };
 
-  // Función para el botón naranja: Simular todas las divisiones
   const handleSimulateAll = async () => {
     startTransition(async () => {
       try {
@@ -83,7 +80,6 @@ export function DashboardClient() {
 
   return (
     <div className="space-y-6">
-      {/* Botón Superior Naranja */}
       <div className="flex justify-end">
         <Button 
           onClick={handleSimulateAll}
@@ -128,7 +124,7 @@ export function DashboardClient() {
               size="icon" 
               className="h-8 w-8" 
               onClick={() => setDisplayedWeek(prev => prev + 1)}
-              disabled={!isWeekFinished} // BLOQUEO: No avanza si no se ha simulado
+              disabled={!isWeekFinished}
             >
               <ChevronRight className={`h-4 w-4 ${!isWeekFinished ? 'opacity-20' : ''}`} />
             </Button>

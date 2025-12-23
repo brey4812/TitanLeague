@@ -48,7 +48,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded) localStorage.setItem('league_active_teams', JSON.stringify(teams));
   }, [teams, isLoaded]);
 
-  // --- LÓGICA EDITADA: EMPAREJAMIENTOS ESTRICTOS ---
+  // --- LÓGICA CORREGIDA: EVITAR DUPLICADOS Y SALTO DE JORNADA ---
   const autoMatchmaker = useCallback(async () => {
     if (teams.length < 2 || !isLoaded) return;
 
@@ -62,32 +62,35 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const divMatches = matches.filter(m => Number(m.division_id) === div.id);
       
-      // 1. Determinar la jornada de trabajo correcta
-      // Si hay partidos pendientes en la última jornada creada, nos quedamos ahí.
-      // Si todos los de la última jornada están jugados, la siguiente es round + 1.
+      // 1. Calcular jornada actual basándose en los resultados
       const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round))) : 1;
+      
+      // Verificamos si todos los partidos de la última jornada creada ya se jugaron
       const pendingInLastRound = divMatches.filter(m => Number(m.round) === lastRound && !m.played);
       
+      // Solo saltamos a la siguiente jornada si la anterior está FULL completada
       const currentWeek = (divMatches.length > 0 && pendingInLastRound.length === 0) 
         ? lastRound + 1 
         : lastRound;
 
-      // 2. Ver qué equipos ya tienen partido en ESTA jornada específica
+      // 2. Registrar qué equipos YA están ocupados en esta jornada
       const busyTeamIds = new Set(
         divMatches
           .filter(m => Number(m.round) === currentWeek)
           .flatMap(m => [String(m.home_team), String(m.away_team)])
       );
 
-      // 3. Filtrar equipos libres
+      // 3. Seleccionar solo equipos que no tengan partido en esta jornada
       const availableTeams = divTeams.filter(t => !busyTeamIds.has(String(t.id)));
 
-      // 4. Generar duelos solo si hay parejas disponibles
+      // 4. Generar duelos solo si hay suficientes equipos libres
       if (availableTeams.length >= 2) {
-        // Importante: i += 2 para no repetir equipos en la misma vuelta
-        for (let i = 0; i < availableTeams.length - 1; i += 2) {
-          const teamA = availableTeams[i];
-          const teamB = availableTeams[i + 1];
+        // Orden aleatorio opcional para que no siempre jueguen los mismos
+        const shuffled = [...availableTeams].sort(() => Math.random() - 0.5);
+
+        for (let i = 0; i < shuffled.length - 1; i += 2) {
+          const teamA = shuffled[i];
+          const teamB = shuffled[i + 1];
 
           const { data, error } = await supabase.from('matches').insert({
             home_team: teamA.id, 
@@ -102,7 +105,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
           if (!error && data) {
             setMatches(prev => [...prev, data[0]]);
-            toast.success(`Jornada ${currentWeek}: ${teamA.name} vs ${teamB.name}`);
+            toast.success(`Nueva Jornada ${currentWeek}: ${teamA.name} vs ${teamB.name}`);
           }
         }
       }
@@ -113,7 +116,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded) autoMatchmaker();
   }, [teams, matches.length, isLoaded, autoMatchmaker]);
 
-  // --- RESTO DE FUNCIONES (Sin cambios para mantener estabilidad) ---
+  // --- FUNCIONES DE GESTIÓN ---
   const addTeam = useCallback((newTeam: Team) => {
     setTeams(prev => prev.find(t => String(t.id) === String(newTeam.id)) ? prev : [...prev, newTeam]);
   }, []);
