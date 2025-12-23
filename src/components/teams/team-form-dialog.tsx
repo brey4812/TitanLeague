@@ -5,34 +5,41 @@ import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Team, Player } from '@/lib/types';
-import { Trash2, UserPlus } from 'lucide-react';
+import { Trash2, UserPlus, Image as ImageIcon, Crosshair } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 
+// Esquema actualizado con face_url y position obligatoria para la IA
 const playerSchema = z.object({
   id: z.union([z.number(), z.string()]),
-  name: z.string().min(1, 'Requerido'),
-  nationality: z.string().min(1, 'Requerido'),
+  name: z.string().min(1, 'Nombre requerido'),
+  nationality: z.string().min(1, 'País requerido'),
   position: z.enum(['Goalkeeper', 'Defender', 'Midfielder', 'Forward']),
-  image_url: z.string().optional().nullable(),
-  rating: z.number().default(70),
+  face_url: z.string().optional().nullable().or(z.literal('')),
+  rating: z.coerce.number().min(1).max(99).default(70),
   stats: z.object({
     goals: z.number().default(0),
     assists: z.number().default(0),
     cleanSheets: z.number().default(0),
-    cards: z.object({ yellow: z.number().default(0), red: z.number().default(0) }),
+    cards: z.object({ 
+      yellow: z.number().default(0), 
+      red: z.number().default(0) 
+    }).default({ yellow: 0, red: 0 }),
     mvp: z.number().default(0),
+  }).default({
+    goals: 0,
+    assists: 0,
+    cleanSheets: 0,
+    mvp: 0
   }),
 });
-
 const formSchema = z.object({
-  name: z.string().min(1, 'Requerido'),
-  country: z.string().min(1, 'Requerido'),
-  division: z.coerce.number().min(1, 'Requerido'),
+  name: z.string().min(1, 'Nombre de equipo requerido'),
+  country: z.string().min(1, 'País de equipo requerido'),
+  division: z.coerce.number().min(1, 'División requerida'),
   badge_url: z.string().optional().nullable().or(z.literal('')),
   roster: z.array(playerSchema),
 });
@@ -40,7 +47,6 @@ const formSchema = z.object({
 type TeamFormData = z.infer<typeof formSchema>;
 
 export function TeamFormDialog({ isOpen, onOpenChange, onSave, team, divisions }: any) {
-  // Añadimos getValues para poder leer el país actual
   const { register, handleSubmit, control, reset, getValues, formState: { errors } } = useForm<TeamFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: { name: '', country: '', division: 0, badge_url: '', roster: [] },
@@ -53,40 +59,38 @@ export function TeamFormDialog({ isOpen, onOpenChange, onSave, team, divisions }
       reset({
         name: team?.name || '',
         country: team?.country || '',
-        division: team?.division ? Number(team.division) : undefined,
+        division: team?.division_id || team?.division || 0,
         badge_url: team?.badge_url || team?.logo || '',
         roster: team?.roster || [],
-      } as any);
+      });
     }
   }, [team, reset, isOpen]);
 
   const onSubmit = (data: TeamFormData) => {
-    const div = divisions.find((d: any) => Number(d.id) === Number(data.division));
     onSave({
       ...team,
       id: team?.id || Date.now(),
       name: data.name,
       country: data.country,
-      division: Number(data.division),
-      divisionName: div?.name || 'Sin División',
+      division_id: Number(data.division),
       badge_url: data.badge_url || '/placeholder-team.png',
-      logo: data.badge_url || '/placeholder-team.png',
-      stats: team?.stats || { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
-      roster: data.roster.slice(0, 20),
+      // Mapeamos los datos asegurando que los números sean números
+      roster: data.roster.map(p => ({
+        ...p,
+        rating: Number(p.rating)
+      })).slice(0, 20),
     });
     onOpenChange(false);
   };
 
-  // Función corregida para añadir jugador
   const addNewPlayer = () => {
-    // Obtenemos el país actual del formulario usando getValues()
     const currentCountry = getValues('country');
-    
     append({ 
       id: `manual-${Date.now()}`, 
       name: '', 
-      nationality: currentCountry || 'Desconocida', // Usamos el país del formulario o uno por defecto
-      position: 'Midfielder', 
+      nationality: currentCountry || 'Spain', 
+      position: 'Forward', 
+      face_url: '',
       rating: 70, 
       stats: { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 } 
     });
@@ -94,41 +98,126 @@ export function TeamFormDialog({ isOpen, onOpenChange, onSave, team, divisions }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader><DialogTitle>{team ? 'Editar Equipo' : 'Nuevo Equipo'}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <ScrollArea className="max-h-[60vh] pr-4">
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Nombre</Label><Input {...register('name')} /></div>
-                <div className="space-y-2"><Label>País</Label><Input {...register('country')} /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>División</Label>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-black uppercase tracking-tighter">
+            {team ? 'Configurar Club' : 'Crear Nuevo Club'}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <ScrollArea className="max-h-[70vh] px-1">
+            <div className="grid gap-6 p-1">
+              {/* SECCIÓN EQUIPO */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border-2">
+                <div className="space-y-2">
+                  <Label className="font-bold uppercase text-[10px]">Nombre del Equipo</Label>
+                  <Input {...register('name')} placeholder="Ej: Real Madrid" className="bg-white" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold uppercase text-[10px]">País de Origen</Label>
+                  <Input {...register('country')} placeholder="Ej: España" className="bg-white" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold uppercase text-[10px]">División</Label>
                   <Controller name="division" control={control} render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value ? String(field.value) : undefined}>
-                      <SelectTrigger><SelectValue placeholder="Selecciona..." /></SelectTrigger>
-                      <SelectContent>{divisions.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}</SelectContent>
+                    <Select onValueChange={field.onChange} value={String(field.value)}>
+                      <SelectTrigger className="bg-white"><SelectValue placeholder="Elegir..." /></SelectTrigger>
+                      <SelectContent>
+                        {divisions.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                      </SelectContent>
                     </Select>
                   )} />
                 </div>
-                <div className="space-y-2"><Label>URL Logo</Label><Input {...register('badge_url')} /></div>
-              </div>
-              <div className="mt-4 flex items-center justify-between border-t pt-4">
-                <p className="font-bold text-sm">Plantilla ({fields.length}/20)</p>
-                <Button type="button" variant="outline" size="sm" onClick={addNewPlayer} disabled={fields.length >= 20}>
-                  <UserPlus className="h-4 w-4 mr-2" /> Añadir
-                </Button>
-              </div>
-              {fields.map((p, i) => (
-                <div key={p.id} className="flex gap-2 mb-2 bg-slate-50 p-2 rounded border">
-                  <Input {...register(`roster.${i}.name`)} className="flex-1" placeholder="Nombre" />
-                  <Button type="button" variant="ghost" size="icon" onClick={() => remove(i)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                <div className="space-y-2">
+                  <Label className="font-bold uppercase text-[10px]">URL Logo (Escudo)</Label>
+                  <Input {...register('badge_url')} placeholder="https://..." className="bg-white" />
                 </div>
-              ))}
+              </div>
+
+              {/* SECCIÓN PLANTILLA */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b-2 border-slate-900 pb-2">
+                  <h3 className="font-black uppercase italic tracking-tighter text-lg">Plantilla ({fields.length}/20)</h3>
+                  <Button type="button" onClick={addNewPlayer} disabled={fields.length >= 20} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                    <UserPlus className="h-4 w-4 mr-2" /> Fichar Jugador
+                  </Button>
+                </div>
+
+                <div className="grid gap-3">
+                  {fields.map((p, i) => (
+                    <div key={p.id} className="group relative bg-white p-4 rounded-xl border-2 hover:border-blue-500 transition-all shadow-sm">
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        
+                        {/* Avatar y Nombre */}
+                        <div className="md:col-span-4 space-y-2">
+                          <Label className="text-[9px] font-black uppercase text-muted-foreground flex items-center gap-1">
+                             <ImageIcon className="h-3 w-3" /> Jugador & Foto
+                          </Label>
+                          <div className="flex gap-2">
+                            <div className="h-10 w-10 shrink-0 rounded-full border-2 bg-slate-100 overflow-hidden">
+                               <img 
+                                 src={getValues(`roster.${i}.face_url`) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`} 
+                                 className="h-full w-full object-cover" 
+                                 alt=""
+                               />
+                            </div>
+                            <Input {...register(`roster.${i}.name`)} placeholder="Nombre" className="h-10" />
+                          </div>
+                        </div>
+
+                        {/* Posición IA */}
+                        <div className="md:col-span-3 space-y-2">
+                          <Label className="text-[9px] font-black uppercase text-muted-foreground flex items-center gap-1">
+                            <Crosshair className="h-3 w-3" /> Posición (IA)
+                          </Label>
+                          <Controller name={`roster.${i}.position`} control={control} render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Goalkeeper">Portero</SelectItem>
+                                <SelectItem value="Defender">Defensa</SelectItem>
+                                <SelectItem value="Midfielder">Medio</SelectItem>
+                                <SelectItem value="Forward">Delantero</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )} />
+                        </div>
+
+                        {/* Media y País */}
+                        <div className="md:col-span-4 grid grid-cols-2 gap-2">
+                          <div className="space-y-2">
+                            <Label className="text-[9px] font-black uppercase text-muted-foreground">Media</Label>
+                            <Input type="number" {...register(`roster.${i}.rating`)} className="h-10" />
+                          </div>
+                          <div className="space-y-2">
+                             <Label className="text-[9px] font-black uppercase text-muted-foreground">País</Label>
+                             <Input {...register(`roster.${i}.nationality`)} className="h-10" />
+                          </div>
+                        </div>
+
+                        {/* Acciones */}
+                        <div className="md:col-span-1 flex justify-end">
+                          <Button type="button" variant="ghost" size="icon" onClick={() => remove(i)} className="text-red-500 hover:bg-red-50">
+                            <Trash2 className="h-5 w-5" />
+                          </Button>
+                        </div>
+
+                        {/* URL de cara oculta/opcional expandible o directa */}
+                        <div className="md:col-span-12">
+                           <Input {...register(`roster.${i}.face_url`)} placeholder="URL de la cara (opcional)" className="h-7 text-[10px] bg-slate-50 border-dashed" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </ScrollArea>
-          <DialogFooter className="mt-4"><Button type="submit" className="w-full">Guardar</Button></DialogFooter>
+          <DialogFooter className="border-t pt-4">
+            <Button type="submit" className="w-full h-12 text-lg font-black uppercase bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200">
+               Guardar Cambios en la Liga
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

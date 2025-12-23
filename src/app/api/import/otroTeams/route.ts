@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Inicializamos Supabase con el Service Role Key para tener permisos de escritura
+// Inicializamos Supabase con Service Role para saltar RLS
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -23,33 +23,20 @@ const MIS_EQUIPOS_LALIGA = [
 ];
 
 export async function GET() {
-  const results = [];
+  const summary = [];
 
   try {
-    for (const equipo of MIS_EQUIPOS_LALIGA) {
-      // 1. Obtener datos del equipo desde TheSportsDB
-      const resT = await fetch(`https://www.thesportsdb.com/api/v1/json/3/lookupteam.php?id=${equipo.id}`);
-      const dataT = await resT.json();
-      const t = dataT.teams[0];
-
-      // 2. Obtener jugadores del equipo
-      const resP = await fetch(`https://www.thesportsdb.com/api/v1/json/3/lookup_all_players.php?id=${equipo.id}`);
-      const dataP = await resP.json();
+    for (const item of MIS_EQUIPOS_LALIGA) {
+      // 1. Consultar datos del equipo en TheSportsDB
+      const response = await fetch(`https://www.thesportsdb.com/api/v1/json/3/lookupteam.php?id=${item.id}`);
+      const data = await response.json();
       
-      // Mapear los primeros 20 jugadores
-      const roster = (dataP.player || []).slice(0, 20).map((p: any) => ({
-        name: p.strPlayer,
-        nationality: p.strNationality || "Desconocida",
-        position: p.strPosition?.includes("Goalkeeper") ? "Goalkeeper" : 
-                  p.strPosition?.includes("Defender") ? "Defender" : 
-                  p.strPosition?.includes("Midfielder") ? "Midfielder" : "Forward",
-        rating: 80,
-        image_url: p.strThumb || null,
-        stats: { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 }
-      }));
+      if (!data.teams) continue;
+      const t = data.teams[0];
 
-      // 3. Insertar el equipo en tu base de datos de Supabase
-      const { data: teamData, error: teamError } = await supabase
+      // 2. Insertar/Actualizar en la tabla 'teams' de Supabase
+      // IMPORTANTE: Aquí NO enviamos la columna 'roster' para evitar el error 400
+      const { error } = await supabase
         .from("teams")
         .upsert({
           id: parseInt(t.idTeam),
@@ -57,30 +44,29 @@ export async function GET() {
           country: t.strCountry,
           badge_url: t.strTeamBadge,
           external_id: t.idTeam,
+          division_id: 1, // Primera División por defecto
           overall: 80,
           attack: 80,
           midfield: 80,
           defense: 80,
-          division_id: 1, // Todos en la misma división
-          stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
-          roster: roster // Se guarda el JSON del roster completo
-        })
-        .select();
+          stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 }
+        });
 
-      if (teamError) throw teamError;
-      results.push({ team: t.strTeam, status: "Importado", players: roster.length });
+      if (error) {
+        console.error(`Error con ${t.strTeam}:`, error.message);
+        summary.push({ team: item.name, status: "Error", detail: error.message });
+      } else {
+        summary.push({ team: t.strTeam, status: "Equipo Creado/Actualizado" });
+      }
     }
 
     return NextResponse.json({
       success: true,
-      message: "Importación masiva completada",
-      details: results
+      message: "Fase 1: Importación de equipos completada",
+      details: summary
     });
 
-  } catch (error: any) {
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message 
-    }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
