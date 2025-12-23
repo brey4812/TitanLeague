@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { cn } from '@/lib/utils';
-import { Toaster } from '@/components/ui/toaster';
+import { Toaster as ShadcnToaster } from '@/components/ui/toaster'; // Renombrado para evitar conflicto
+import { Toaster as SonnerToaster } from "sonner"; // Importamos el de Sonner
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -36,7 +37,10 @@ export default function RootLayout({
               </div>
           </SidebarProvider>
         </LeagueProvider>
-        <Toaster />
+        
+        {/* Renderizamos ambos Toasters */}
+        <ShadcnToaster /> 
+        <SonnerToaster position="top-center" richColors /> 
       </body>
     </html>
   );

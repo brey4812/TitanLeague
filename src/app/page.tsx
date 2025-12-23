@@ -1,15 +1,17 @@
 "use client";
 
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { Icons } from "@/components/icons";
 import { LeagueContext } from '@/context/league-context';
-import { Trophy, Users, Calendar, Goal } from "lucide-react";
+import { Trophy, Users, Calendar, Goal, Zap, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export default function DashboardPage() {
-  const { teams, players, matches, isLoaded } = useContext(LeagueContext);
+  const { teams, players, matches, isLoaded, divisions } = useContext(LeagueContext);
+  const [isSimulatingAll, setIsSimulatingAll] = useState(false);
 
   if (!isLoaded) {
     return (
@@ -21,9 +23,34 @@ export default function DashboardPage() {
   
   const totalTeams = teams.length;
   const totalPlayers = players.length;
-  // Calculamos los goles totales sumando los golesFor de cada equipo en la liga
-  const totalGoals = teams.reduce((sum, team) => sum + (team.stats.goalsFor || 0), 0);
-  const currentWeek = matches.length > 0 ? Math.max(...matches.map(m => m.week)) : 0;
+  const totalGoals = teams.reduce((sum: number, team: any) => sum + (team.stats?.goalsFor || 0), 0);
+  
+  // CORRECCIÓN DE ERRORES: Usamos (m: any) para evitar fallos de tipos
+  const rawWeek = matches.length > 0 
+    ? Math.max(...matches.map((m: any) => (m.week || m.matchday || 0))) 
+    : 0;
+  const currentWeek = rawWeek > 0 ? rawWeek : 1;
+
+  const handleSimulateAll = async () => {
+    setIsSimulatingAll(true);
+    try {
+      const divisionIds = divisions.map((d: any) => d.id);
+      for (const divId of divisionIds) {
+        const res = await fetch("/api/match/simulate-matchday", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ divisionId: divId, matchday: currentWeek }),
+        });
+        if (!res.ok) throw new Error(`Error en división ${divId}`);
+      }
+      toast.success("¡Jornada simulada en todas las divisiones!");
+      window.location.reload(); 
+    } catch (error: any) {
+      toast.error("Error: " + error.message);
+    } finally {
+      setIsSimulatingAll(false);
+    }
+  };
 
   const stats = [
     { title: "Equipos Totales", value: totalTeams, icon: <Trophy className="h-5 w-5 text-blue-600" /> },
@@ -34,25 +61,30 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto py-6 space-y-8">
-      <PageHeader
-        title="Panel de Control"
-        description="Bienvenido a la Liga Titán. Resumen en tiempo real de tu base de datos y competición."
-      />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <PageHeader title="Panel de Control" description="Resumen en tiempo real de la Liga Titán." />
+        <Button 
+          onClick={handleSimulateAll} 
+          disabled={isSimulatingAll || teams.length === 0}
+          variant="outline"
+          className="bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 font-bold"
+        >
+          {isSimulatingAll ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Zap className="mr-2 h-4 w-4 fill-amber-500" />}
+          Simular Todas las Divisiones
+        </Button>
+      </div>
       
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <Card key={stat.title} className="shadow-sm border-2">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{stat.title}</CardTitle>
+              <CardTitle className="text-sm font-bold uppercase text-muted-foreground">{stat.title}</CardTitle>
               {stat.icon}
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black">{stat.value}</div>
-            </CardContent>
+            <CardContent><div className="text-3xl font-black">{stat.value}</div></CardContent>
           </Card>
         ))}
       </div>
-      
       <DashboardClient />
     </div>
   );
