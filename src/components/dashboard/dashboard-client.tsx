@@ -8,15 +8,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileText, Download, Play, ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { MatchResult } from "@/lib/types"; // Importamos el tipo
 
-export function DashboardClient() {
+// AÑADIMOS LA INTERFAZ PARA RECIBIR LA FUNCIÓN DEL PADRE
+interface DashboardClientProps {
+  onMatchClick?: (match: MatchResult) => void;
+}
+
+export function DashboardClient({ onMatchClick }: DashboardClientProps) {
   const { matches, divisions, getTeamById, isLoaded, refreshData } = useContext(LeagueContext);
   const [isPending, startTransition] = useTransition();
   
   const [displayedDivision, setDisplayedDivision] = useState<string>("1");
   const [displayedWeek, setDisplayedWeek] = useState(1);
 
-  // Filtrado estricto por división y jornada
   const filteredMatches = useMemo(() => {
     const divId = parseInt(displayedDivision);
     return matches.filter((m: any) => 
@@ -25,7 +30,6 @@ export function DashboardClient() {
     );
   }, [matches, displayedDivision, displayedWeek]);
 
-  // BLOQUEO: Solo permite avanzar si la jornada actual está simulada al 100%
   const isWeekFinished = useMemo(() => {
     if (filteredMatches.length === 0) return false;
     return filteredMatches.every((m: any) => m.played === true);
@@ -47,7 +51,7 @@ export function DashboardClient() {
         if (!result.ok) throw new Error(result.error || "Error al simular");
         
         toast.success("Jornada simulada con éxito");
-        await refreshData(); // Obliga al contexto a generar la siguiente jornada
+        await refreshData();
       } catch (error: any) {
         toast.error(error.message);
       }
@@ -158,14 +162,14 @@ export function DashboardClient() {
                 if (!home || !away) return null;
 
                 return (
-                  <div key={match.id} className="grid grid-cols-[1fr_auto_1fr_auto] items-center p-5 hover:bg-slate-50/50 transition-colors">
+                  <div key={match.id} className="grid grid-cols-[1fr_auto_1fr_auto] items-center p-5 hover:bg-slate-50/50 transition-colors group">
                     <div className="flex items-center justify-end gap-4">
                       <span className="font-bold text-slate-700 text-sm">{home.name}</span>
                       <img src={home.badge_url} className="w-10 h-10 object-contain" alt="" />
                     </div>
 
-                    <div className="flex items-center px-10">
-                      <div className="bg-slate-900 text-white font-black text-xl px-6 py-1.5 rounded-xl min-w-[110px] text-center tracking-tighter shadow-lg">
+                    <div className="flex items-center px-10 cursor-pointer" onClick={() => onMatchClick?.(match)}>
+                      <div className="bg-slate-900 text-white font-black text-xl px-6 py-1.5 rounded-xl min-w-[110px] text-center tracking-tighter shadow-lg group-hover:scale-105 transition-transform">
                         {match.played ? `${match.home_goals} - ${match.away_goals}` : "VS"}
                       </div>
                     </div>
@@ -176,7 +180,13 @@ export function DashboardClient() {
                     </div>
 
                     <div className="pl-4">
-                      <Button variant="ghost" size="icon" className="text-slate-300 hover:text-blue-600">
+                      {/* BOTÓN DEL PAPEL VINCULADO AL MODAL */}
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-slate-300 hover:text-blue-600 hover:bg-blue-50"
+                        onClick={() => onMatchClick?.(match)}
+                      >
                         <FileText className="h-5 w-5" />
                       </Button>
                     </div>
