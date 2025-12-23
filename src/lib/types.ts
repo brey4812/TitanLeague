@@ -6,8 +6,8 @@ export interface Player {
   id: number;
   name: string;
   position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward'; // Obligatorio para la IA
-  country?: string; // País del jugador
-  face_url?: string; // URL opcional de la cara
+  country?: string; 
+  face_url?: string; 
   rating: number;
   stats: {
     goals: number;
@@ -61,6 +61,15 @@ export interface MatchResult {
   id: number | string;
   season: number;
   week: number;
+  // --- PROPIEDADES PARA COMPATIBILIDAD CON SUPABASE ---
+  round?: number;           // Coincide con tu columna 'round' en DB
+  home_team_id?: any;       // ID del equipo local en DB
+  away_team_id?: any;       // ID del equipo visitante en DB
+  home_goals?: number;      // Goles local en DB
+  away_goals?: number;      // Goles visitante en DB
+  played?: boolean;         // Estado del partido en DB
+  division_id?: number;     // ID de división en DB
+  // --- PROPIEDADES FRONTEND ---
   homeTeamId: number | string;
   awayTeamId: number | string;
   homeScore: number;
@@ -95,4 +104,6 @@ export interface LeagueContextType {
   getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
   resetLeagueData: () => void;
   importLeagueData: (newData: any) => boolean;
+  // --- FUNCIÓN DE SINCRONIZACIÓN ---
+  refreshData: () => Promise<void>; // Definición necesaria para evitar errores en Dashboard
 }

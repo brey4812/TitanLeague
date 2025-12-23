@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     const matchesPerRound = teamIds.length / 2;
     const matchesToCreate = [];
 
-    for (let round = 0; round < totalRounds; round++) {
+    for (let roundIdx = 0; roundIdx < totalRounds; roundIdx++) {
       for (let i = 0; i < matchesPerRound; i++) {
         const home = teamIds[i];
         const away = teamIds[teamIds.length - 1 - i];
@@ -38,7 +38,8 @@ export async function POST(req: Request) {
             season_id: seasonId,
             home_team_id: home,
             away_team_id: away,
-            week: round + 1,
+            // CAMBIO CLAVE: Usamos 'round' en lugar de 'week' para coincidir con tu DB
+            round: roundIdx + 1, 
             played: false,
             home_goals: 0,
             away_goals: 0,
@@ -49,10 +50,11 @@ export async function POST(req: Request) {
       teamIds.splice(1, 0, teamIds.pop()!);
     }
 
+    // Insertar en la tabla 'matches'
     const { error } = await supabase.from("matches").insert(matchesToCreate);
     if (error) throw error;
 
-    return NextResponse.json({ ok: true, message: "Calendario creado" });
+    return NextResponse.json({ ok: true, message: "Calendario creado con éxito" });
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
