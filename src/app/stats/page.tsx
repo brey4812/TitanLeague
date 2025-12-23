@@ -5,7 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, Star, ShieldAlert, Ban, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Trophy, Star, ShieldAlert, Ban, Loader2, Download } from "lucide-react";
 
 export default function StatsPage() {
     const [data, setData] = useState<any>(null);
@@ -27,6 +28,60 @@ export default function StatsPage() {
         loadData();
     }, []);
 
+    // FUNCIÓN DE DESCARGA REINTEGRADA
+    const downloadCSV = (type: string) => {
+        if (!data) return;
+
+        let csvContent = "data:text/csv;charset=utf-8,";
+        let fileName = `${type}_liga_titan.csv`;
+        let rows = [];
+
+        if (type === 'clasificacion') {
+            rows.push(["Posicion", "Equipo", "PJ", "GF", "GC", "DG", "Puntos"]);
+            data.standings?.forEach((t: any, i: number) => {
+                rows.push([
+                    i + 1, 
+                    t.teams?.name || "Desconocido", 
+                    t.played, 
+                    t.goals_for, 
+                    t.goals_against, 
+                    t.goals_for - t.goals_against, 
+                    t.points
+                ]);
+            });
+        } else {
+            // Mapeo para tablas de jugadores (goles, asistencias, etc.)
+            const categoryMap: any = {
+                goleadores: { list: data.topScorers, label: "Goles", key: "goals" },
+                asistentes: { list: data.topAssists, label: "Asistencias", key: "assists" },
+                porteros: { list: data.topKeepers, label: "Vallas Invictas", key: "clean_sheets" },
+            };
+
+            const config = categoryMap[type];
+            if (config) {
+                rows.push(["Posicion", "Jugador", "Equipo", config.label]);
+                config.list?.forEach((p: any, i: number) => {
+                    rows.push([i + 1, p.name, p.teams?.name || "N/A", p[config.key]]);
+                });
+            }
+        }
+
+        if (rows.length === 0) return;
+
+        rows.forEach(rowArray => {
+            let row = rowArray.join(",");
+            csvContent += row + "\r\n";
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
@@ -43,6 +98,9 @@ export default function StatsPage() {
                     title="Centro de Estadísticas"
                     description="Análisis detallado de equipos y rendimiento individual basado en datos reales."
                 />
+                <Button variant="outline" size="sm" onClick={() => downloadCSV('clasificacion')}>
+                    <Download className="mr-2 h-4 w-4" /> Exportar Global
+                </Button>
             </div>
             
             <Tabs defaultValue="standings" className="w-full">
@@ -57,6 +115,12 @@ export default function StatsPage() {
                 {/* TABLA DE POSICIONES */}
                 <TabsContent value="standings">
                     <Card className="overflow-hidden border-2">
+                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                            <span className="font-bold">Clasificación General</span>
+                            <Button variant="ghost" size="sm" onClick={() => downloadCSV('clasificacion')}>
+                                <Download className="h-4 w-4 mr-2" /> Descargar CSV
+                            </Button>
+                        </div>
                         <Table>
                             <TableHeader className="bg-slate-50">
                                 <TableRow>
@@ -111,6 +175,7 @@ export default function StatsPage() {
                         statKey="goals" 
                         statLabel="Goles" 
                         colorClass="text-orange-600"
+                        onDownload={() => downloadCSV('goleadores')}
                     />
                 </TabsContent>
 
@@ -123,10 +188,11 @@ export default function StatsPage() {
                         statKey="assists" 
                         statLabel="Asistencias" 
                         colorClass="text-blue-600"
+                        onDownload={() => downloadCSV('asistentes')}
                     />
                 </TabsContent>
 
-                {/* PORTEROS (Clean Sheets) */}
+                {/* PORTEROS */}
                 <TabsContent value="keepers">
                     <StatTable 
                         title="Guante de Oro" 
@@ -135,6 +201,7 @@ export default function StatsPage() {
                         statKey="clean_sheets" 
                         statLabel="Vallas Invictas" 
                         colorClass="text-emerald-600"
+                        onDownload={() => downloadCSV('porteros')}
                     />
                 </TabsContent>
 
@@ -142,13 +209,13 @@ export default function StatsPage() {
                 <TabsContent value="discipline">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Card className="p-0 overflow-hidden border-2">
-                            <div className="p-4 bg-yellow-50 border-b flex items-center gap-2 font-bold">
+                            <div className="p-4 bg-yellow-50 border-b flex items-center gap-2 font-bold text-yellow-800">
                                 <Ban className="text-yellow-600 w-5 h-5" /> Tarjetas Amarillas
                             </div>
                             <SimpleDisciplineTable data={data?.yellowCards} type="yellow" />
                         </Card>
                         <Card className="p-0 overflow-hidden border-2">
-                            <div className="p-4 bg-red-50 border-b flex items-center gap-2 font-bold">
+                            <div className="p-4 bg-red-50 border-b flex items-center gap-2 font-bold text-red-800">
                                 <Ban className="text-red-600 w-5 h-5" /> Tarjetas Rojas
                             </div>
                             <SimpleDisciplineTable data={data?.redCards} type="red" />
@@ -160,11 +227,16 @@ export default function StatsPage() {
     );
 }
 
-function StatTable({ title, icon, data, statKey, statLabel, colorClass }: any) {
+function StatTable({ title, icon, data, statKey, statLabel, colorClass, onDownload }: any) {
     return (
         <Card className="overflow-hidden border-2">
-            <div className="p-4 border-b bg-slate-50 flex items-center gap-2 font-bold text-lg">
-                {icon} {title}
+            <div className="p-4 border-b bg-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-lg">
+                    {icon} {title}
+                </div>
+                <Button variant="outline" size="sm" onClick={onDownload}>
+                    <Download className="h-4 w-4 mr-2" /> CSV
+                </Button>
             </div>
             <Table>
                 <TableHeader>
@@ -190,8 +262,9 @@ function StatTable({ title, icon, data, statKey, statLabel, colorClass }: any) {
                                             src={p.teams?.badge_url || '/placeholder-team.png'} 
                                             className="w-4 h-4 object-contain"
                                             onError={(e) => (e.currentTarget.src = '/placeholder-team.png')}
+                                            alt=""
                                         />
-                                        {p.teams?.name}
+                                        {p.teams?.name || "N/A"}
                                     </div>
                                 </TableCell>
                                 <TableCell className={`text-center font-bold text-lg ${colorClass}`}>{p[statKey] || 0}</TableCell>
@@ -219,7 +292,7 @@ function SimpleDisciplineTable({ data, type }: any) {
                         <TableRow key={p.id}>
                             <TableCell className="py-3 font-medium pl-4">{p.name}</TableCell>
                             <TableCell className="py-3 text-right pr-4">
-                                <Badge className={type === 'yellow' ? "bg-yellow-500 hover:bg-yellow-600 text-black" : "bg-red-600 hover:bg-red-700 text-white"}>
+                                <Badge className={type === 'yellow' ? "bg-yellow-500 hover:bg-yellow-600 text-black border-none" : "bg-red-600 hover:bg-red-700 text-white border-none"}>
                                     {type === 'yellow' ? (p.yellow_cards || 0) : (p.red_cards || 0)}
                                 </Badge>
                             </TableCell>
