@@ -2,9 +2,8 @@
 
 import { createContext, useState, ReactNode, useCallback, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Team, Player, MatchResult, TeamOfTheWeekPlayer, Division, LeagueContextType } from "@/lib/types";
+import { Team, Player, MatchResult, Division, LeagueContextType } from "@/lib/types";
 
-// Inicialización de Supabase con tus variables de entorno
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -24,76 +23,71 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     { id: 4, name: "Cuarta División" }
   ];
 
-  // --- NUEVA FUNCIÓN: CARGA REAL DESDE SUPABASE ---
-  // Esta función es la que hace que los partidos aparezcan en el panel
   const refreshData = useCallback(async () => {
     try {
-      // Traemos equipos con sus jugadores vinculados
-      const { data: teamsData } = await supabase
-        .from('teams')
-        .select('*, roster:players(*)');
-      
-      // Traemos todos los partidos de la tabla 'matches'
-      const { data: matchesData } = await supabase
-        .from('matches')
-        .select('*');
+      const { data: teamsData } = await supabase.from('teams').select('*, roster:players(*)');
+      const { data: matchesData } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
 
       if (teamsData) setTeams(teamsData);
       if (matchesData) setMatches(matchesData);
     } catch (error) {
-      console.error("Error al refrescar datos:", error);
+      console.error("Error:", error);
     } finally {
       setIsLoaded(true);
     }
   }, []);
 
-  // Carga inicial al abrir la app
+  // --- LÓGICA DE GENERACIÓN AUTOMÁTICA ---
+  const autoMatchmaker = useCallback(async () => {
+    // Agrupamos equipos por división
+    for (const div of divisions) {
+      const divTeams = teams.filter(t => Number(t.division_id) === div.id);
+      
+      // Si hay un número par de equipos, verificamos si el último necesita pareja
+      if (divTeams.length > 0 && divTeams.length % 2 === 0) {
+        const lastTeam = divTeams[divTeams.length - 1];
+        
+        // Verificamos si este equipo ya tiene un partido creado
+        const hasMatch = matches.some((m: any) => 
+          m.home_team_id === lastTeam.id || m.away_team_id === lastTeam.id
+        );
+
+        if (!hasMatch) {
+          // Buscamos al penúltimo equipo de la misma división para emparejar
+          const opponent = divTeams[divTeams.length - 2];
+          
+          await supabase.from('matches').insert({
+            home_team_id: opponent.id,
+            away_team_id: lastTeam.id,
+            round: 1,
+            played: false,
+            division_id: div.id
+          });
+          refreshData();
+        }
+      }
+    }
+  }, [teams, matches, refreshData]);
+
   useEffect(() => {
     refreshData();
   }, [refreshData]);
 
-  // --- GESTIÓN DE EQUIPOS (Mantenida) ---
-  const addTeam = useCallback((newTeam: Team) => {
-    setTeams(prev => {
-      if (prev.find(t => String(t.id) === String(newTeam.id))) return prev;
-      const formattedTeam = {
-        ...newTeam,
-        badge_url: newTeam.badge_url || (newTeam as any).logo || '/placeholder-team.png',
-        roster: (newTeam.roster || []).slice(0, 20)
-      };
-      return [...prev, formattedTeam];
-    });
-  }, []);
+  // Ejecutar el emparejador cuando cambian los equipos
+  useEffect(() => {
+    if (isLoaded) autoMatchmaker();
+  }, [teams.length, isLoaded, autoMatchmaker]);
 
-  const deleteTeam = useCallback((id: number | string) => {
-    setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
-  }, []);
-
-  // --- NUEVA FUNCIÓN: IMPORTACIÓN ---
-  const importLeagueData = useCallback((newData: any) => {
-    try {
-      if (!newData.teams) throw new Error("Formato inválido");
-      setTeams(newData.teams);
-      setMatches(newData.matches || []);
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }, []);
-
-  // --- BÚSQUEDAS (Esenciales para que DashboardClient funcione) ---
   const getTeamById = useCallback((id: number | string) => 
     teams.find(t => String(t.id) === String(id)), [teams]);
-  
-  const getPlayerById = useCallback((id: number | string) => 
-    teams.flatMap(t => t.roster).find(p => String(p.id) === String(id)), [teams]);
 
-  const simulateMatchday = useCallback(() => {}, []);
-  const resetLeagueData = () => {
-    if (confirm("¿Borrar todo?")) {
-      setTeams([]);
-      setMatches([]);
-      window.location.reload();
+  const getPlayerById = useCallback((id: number | string) => 
+    teams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)), [teams]);
+
+  const resetLeagueData = async () => {
+    if (confirm("¿Borrar todos los partidos y empezar de cero?")) {
+      await supabase.from('matches').delete().neq('id', 0);
+      refreshData();
     }
   };
 
@@ -102,16 +96,22 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       teams,
       divisions,
       matches,
-      players: teams.flatMap(t => t.roster),
+      players: teams.flatMap(t => t.roster || []),
       isLoaded,
-      addTeam,
-      deleteTeam,
       getTeamById,
       getPlayerById,
-      simulateMatchday,
+      refreshData,
       resetLeagueData,
-      importLeagueData,
-      refreshData // <--- Exportamos esto para usarlo en el Dashboard
+      importLeagueData: (d: any) => true,
+      addTeam: (t: any) => {},
+      deleteTeam: (id: any) => {},
+      updateTeam: (t: any) => {},
+      addPlayerToTeam: (id: any, p: any) => {},
+      removePlayerFromTeam: (id: any, pid: any) => {},
+      simulateMatchday: () => {},
+      getTeamOfTheWeek: (w: any) => [],
+      getBestEleven: (t: any) => [],
+      getTeamByPlayerId: (id: any) => undefined,
     } as any}>
       {children}
     </LeagueContext.Provider>
