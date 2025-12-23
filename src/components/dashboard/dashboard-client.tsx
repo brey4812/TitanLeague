@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useMemo, useContext } from "react";
+import { useState, useMemo, useContext, useTransition } from "react";
 import { LeagueContext } from "@/context/league-context";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Download, Play, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Download, Play, ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 export function DashboardClient() {
-  const { matches, divisions, getTeamById, simulateMatchday, isLoaded } = useContext(LeagueContext);
+  const { matches, divisions, getTeamById, isLoaded, refreshData } = useContext(LeagueContext);
+  const [isPending, startTransition] = useTransition();
   
   // Estados para controlar el filtrado
   const [displayedDivision, setDisplayedDivision] = useState<string>("1");
@@ -24,15 +26,80 @@ export function DashboardClient() {
     );
   }, [matches, displayedDivision, displayedWeek]);
 
+  // BLOQUEO: Verificar si todos los partidos de la jornada actual están jugados
+  const isWeekFinished = useMemo(() => {
+    if (filteredMatches.length === 0) return false;
+    return filteredMatches.every((m: any) => m.played === true);
+  }, [filteredMatches]);
+
+  // Función para simular la jornada actual de la división seleccionada
+  const handleSimulateMatchday = async () => {
+    startTransition(async () => {
+      try {
+        const response = await fetch('/api/match/simulate-matchday', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            divisionId: displayedDivision, 
+            week: displayedWeek 
+          })
+        });
+        
+        const result = await response.json();
+        if (!result.ok) throw new Error(result.error || "Error al simular");
+        
+        toast.success("Jornada simulada con éxito");
+        await refreshData();
+      } catch (error: any) {
+        toast.error(error.message);
+      }
+    });
+  };
+
+  // Función para el botón naranja: Simular todas las divisiones
+  const handleSimulateAll = async () => {
+    startTransition(async () => {
+      try {
+        for (const div of divisions) {
+          const response = await fetch('/api/match/simulate-matchday', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              divisionId: div.id, 
+              week: displayedWeek 
+            })
+          });
+          if (!response.ok) throw new Error(`Error en división ${div.id}`);
+        }
+        toast.success("Todas las divisiones simuladas");
+        await refreshData();
+      } catch (error: any) {
+        toast.error(error.message);
+      }
+    });
+  };
+
   if (!isLoaded) return null;
 
   return (
     <div className="space-y-6">
+      {/* Botón Superior Naranja */}
+      <div className="flex justify-end">
+        <Button 
+          onClick={handleSimulateAll}
+          disabled={isPending}
+          variant="outline" 
+          className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold uppercase text-[10px]"
+        >
+          <Zap className="mr-2 h-3.5 w-3.5 fill-amber-500" />
+          Simular todas las divisiones
+        </Button>
+      </div>
+
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Selector de División */}
           <Select value={displayedDivision} onValueChange={setDisplayedDivision}>
-            <SelectTrigger className="w-[180px] border-2 font-bold">
+            <SelectTrigger className="w-[180px] border-2 font-bold text-slate-700">
               <SelectValue placeholder="División" />
             </SelectTrigger>
             <SelectContent>
@@ -44,7 +111,6 @@ export function DashboardClient() {
             </SelectContent>
           </Select>
 
-          {/* Navegación de Jornadas */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border-2">
             <Button 
               variant="ghost" 
@@ -62,8 +128,9 @@ export function DashboardClient() {
               size="icon" 
               className="h-8 w-8" 
               onClick={() => setDisplayedWeek(prev => prev + 1)}
+              disabled={!isWeekFinished} // BLOQUEO: No avanza si no se ha simulado
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className={`h-4 w-4 ${!isWeekFinished ? 'opacity-20' : ''}`} />
             </Button>
           </div>
         </div>
@@ -73,11 +140,13 @@ export function DashboardClient() {
             <Download className="mr-2 h-3.5 w-3.5" /> Descargar Resultados
           </Button>
           <Button 
-            onClick={() => simulateMatchday()} 
+            onClick={handleSimulateMatchday}
+            disabled={isPending || isWeekFinished}
             size="sm" 
             className="bg-blue-600 hover:bg-blue-700 font-bold uppercase text-[10px]"
           >
-            <Play className="mr-2 h-3.5 w-3.5 fill-current" /> Simular Jornada
+            <Play className="mr-2 h-3.5 w-3.5 fill-current" /> 
+            {isWeekFinished ? "Jornada Finalizada" : "Simular Jornada"}
           </Button>
         </div>
       </div>
