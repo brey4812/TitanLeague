@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useState, ReactNode, useCallback, useEffect } from "react";
+import { createContext, useState, ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Team, Player, MatchResult, Division, LeagueContextType } from "@/lib/types";
+import { Team, Player, MatchResult, Division, LeagueContextType, TeamOfTheWeekPlayer } from "@/lib/types";
 import { toast } from "sonner";
 
 const supabase = createClient(
@@ -24,6 +24,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     { id: 4, name: "Cuarta División" }
   ];
 
+  // --- REFRESCAR DATOS ---
   const refreshData = useCallback(async () => {
     try {
       const savedTeams = localStorage.getItem('league_active_teams');
@@ -44,122 +45,103 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
-  useEffect(() => {
-    if (isLoaded) localStorage.setItem('league_active_teams', JSON.stringify(teams));
-  }, [teams, isLoaded]);
+  // --- LÓGICA DE ESTADÍSTICAS Y TABLA DE POSICIONES ---
+  // Recalculamos la tabla cada vez que cambian los partidos
+  const processedTeams = useMemo(() => {
+    return teams.map(team => {
+      const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 };
+      
+      matches.filter(m => m.played && (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id)))
+        .forEach(m => {
+          const isHome = String(m.home_team) === String(team.id);
+          const gFor = isHome ? m.home_goals : m.away_goals;
+          const gAg = isHome ? m.away_goals : m.home_goals;
+          
+          stats.goalsFor += gFor;
+          stats.goalsAgainst += gAg;
+          
+          if (gFor > gAg) stats.wins += 1;
+          else if (gFor === gAg) stats.draws += 1;
+          else stats.losses += 1;
+        });
 
-  // --- LÓGICA CORREGIDA: EVITAR DUPLICADOS Y SALTO DE JORNADA ---
+      return { ...team, stats };
+    });
+  }, [teams, matches]);
+
+  // --- LÓGICA DEL 11 DE LA JORNADA Y ESTADÍSTICAS DE JUGADORES ---
+  const getTeamOfTheWeek = useCallback((week: number): TeamOfTheWeekPlayer[] => {
+    // Aquí filtramos los jugadores que destacaron en los partidos de la semana 'week'
+    // Por ahora devolvemos los mejores por rating de los equipos que jugaron
+    const playersInWeek = processedTeams
+      .flatMap(t => t.roster.map(p => ({ ...p, teamName: t.name, teamLogoUrl: t.badge_url, teamDataAiHint: t.real_team_name })));
+    
+    return playersInWeek.sort((a, b) => b.rating - a.rating).slice(0, 11);
+  }, [processedTeams]);
+
+  // --- LÓGICA DE EMPAREJAMIENTOS ---
   const autoMatchmaker = useCallback(async () => {
     if (teams.length < 2 || !isLoaded) return;
 
     for (const div of divisions) {
-      const divTeams = teams.filter(t => 
-        Number(t.division_id) === div.id && 
-        (t.roster?.length || 0) >= 11
-      );
-
+      const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
-      const divMatches = matches.filter(m => Number(m.division_id) === div.id);
-      
-      // 1. Calcular jornada actual basándose en los resultados
+      const divMatches = matches.filter(m => m.division_id === div.id);
       const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round))) : 1;
-      
-      // Verificamos si todos los partidos de la última jornada creada ya se jugaron
       const pendingInLastRound = divMatches.filter(m => Number(m.round) === lastRound && !m.played);
       
-      // Solo saltamos a la siguiente jornada si la anterior está FULL completada
-      const currentWeek = (divMatches.length > 0 && pendingInLastRound.length === 0) 
-        ? lastRound + 1 
-        : lastRound;
+      const currentWeek = (divMatches.length > 0 && pendingInLastRound.length === 0) ? lastRound + 1 : lastRound;
 
-      // 2. Registrar qué equipos YA están ocupados en esta jornada
       const busyTeamIds = new Set(
-        divMatches
-          .filter(m => Number(m.round) === currentWeek)
-          .flatMap(m => [String(m.home_team), String(m.away_team)])
+        divMatches.filter(m => Number(m.round) === currentWeek).flatMap(m => [String(m.home_team), String(m.away_team)])
       );
 
-      // 3. Seleccionar solo equipos que no tengan partido en esta jornada
       const availableTeams = divTeams.filter(t => !busyTeamIds.has(String(t.id)));
 
-      // 4. Generar duelos solo si hay suficientes equipos libres
       if (availableTeams.length >= 2) {
-        // Orden aleatorio opcional para que no siempre jueguen los mismos
         const shuffled = [...availableTeams].sort(() => Math.random() - 0.5);
-
         for (let i = 0; i < shuffled.length - 1; i += 2) {
-          const teamA = shuffled[i];
-          const teamB = shuffled[i + 1];
-
           const { data, error } = await supabase.from('matches').insert({
-            home_team: teamA.id, 
-            away_team: teamB.id,
-            round: currentWeek,
-            played: false,
-            division_id: div.id,
-            competition: "League",
-            home_goals: 0,
-            away_goals: 0
+            home_team: shuffled[i].id, 
+            away_team: shuffled[i+1].id,
+            round: currentWeek, played: false, division_id: div.id,
+            competition: "League", home_goals: 0, away_goals: 0
           }).select();
 
           if (!error && data) {
             setMatches(prev => [...prev, data[0]]);
-            toast.success(`Nueva Jornada ${currentWeek}: ${teamA.name} vs ${teamB.name}`);
+            toast.success(`Nueva Jornada ${currentWeek}: ${shuffled[i].name} vs ${shuffled[i+1].name}`);
           }
         }
       }
     }
   }, [teams, matches, divisions, isLoaded]);
 
-  useEffect(() => {
-    if (isLoaded) autoMatchmaker();
-  }, [teams, matches.length, isLoaded, autoMatchmaker]);
+  useEffect(() => { if (isLoaded) autoMatchmaker(); }, [matches.length, isLoaded, autoMatchmaker]);
 
-  // --- FUNCIONES DE GESTIÓN ---
-  const addTeam = useCallback((newTeam: Team) => {
-    setTeams(prev => prev.find(t => String(t.id) === String(newTeam.id)) ? prev : [...prev, newTeam]);
-  }, []);
-
-  const deleteTeam = useCallback((id: number | string) => {
-    setTeams(prev => prev.filter(t => String(t.id) !== String(id)));
-    setMatches(prev => prev.filter(m => String(m.home_team) !== String(id) && String(m.away_team) !== String(id)));
-    toast.success("Equipo quitado de la liga");
-  }, []);
-
-  const updateTeam = useCallback((updated: Team) => {
-    setTeams(prev => prev.map(t => String(t.id) === String(updated.id) ? updated : t));
-  }, []);
-
-  const addPlayerToTeam = useCallback((teamId: number | string, player: Player) => {
-    setTeams(prev => prev.map(team => String(team.id) === String(teamId) 
-      ? { ...team, roster: [...(team.roster || []), player] } : team));
-  }, []);
-
-  const removePlayerFromTeam = useCallback((teamId: number | string, playerId: number | string) => {
-    setTeams(prev => prev.map(team => String(team.id) === String(teamId) 
-      ? { ...team, roster: (team.roster || []).filter(p => String(p.id) !== String(playerId)) } : team));
-  }, []);
-
-  const getTeamById = useCallback((id: number | string) => teams.find(t => String(t.id) === String(id)), [teams]);
-  const getPlayerById = useCallback((id: number | string) => teams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)), [teams]);
-  const getTeamByPlayerId = useCallback((pid: number | string) => teams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))), [teams]);
-
-  const resetLeagueData = () => {
-    if (confirm("¿Limpiar liga activa?")) {
-      setTeams([]);
-      localStorage.removeItem('league_active_teams');
-      window.location.reload();
-    }
-  };
-
+  // --- RENDERIZADO DEL CONTEXTO ---
   return (
     <LeagueContext.Provider value={{
-      teams, divisions, matches, players: teams.flatMap(t => t.roster || []), isLoaded,
-      addTeam, deleteTeam, updateTeam, addPlayerToTeam, removePlayerFromTeam,
-      getTeamById, getPlayerById, getTeamByPlayerId, simulateMatchday: () => {},
-      getTeamOfTheWeek: (week: number) => [], getBestEleven: (type: string, val?: number) => [],
-      resetLeagueData, importLeagueData: (d: any) => true, refreshData
+      teams: processedTeams, // Usamos los equipos con estadísticas calculadas
+      divisions,
+      matches,
+      players: processedTeams.flatMap(t => t.roster || []),
+      isLoaded,
+      addTeam: (t) => setTeams(prev => [...prev, t]),
+      deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))),
+      updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)),
+      addPlayerToTeam: (tid, p) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: [...t.roster, p]} : t)),
+      removePlayerFromTeam: (tid, pid) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: t.roster.filter(p => String(p.id) !== String(pid))} : t)),
+      getTeamById: (id) => processedTeams.find(t => String(t.id) === String(id)),
+      getPlayerById: (id) => processedTeams.flatMap(t => t.roster).find(p => String(p.id) === String(id)),
+      getTeamByPlayerId: (pid) => processedTeams.find(t => t.roster.some(p => String(p.id) === String(pid))),
+      simulateMatchday: () => {}, 
+      getTeamOfTheWeek,
+      getBestEleven: (type) => getTeamOfTheWeek(1), // Simplificado para el ejemplo
+      resetLeagueData: () => { localStorage.removeItem('league_active_teams'); window.location.reload(); },
+      importLeagueData: () => true,
+      refreshData
     }}>
       {children}
     </LeagueContext.Provider>
