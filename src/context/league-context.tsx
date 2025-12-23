@@ -13,6 +13,7 @@ const supabase = createClient(
 export const LeagueContext = createContext<LeagueContextType>({} as LeagueContextType);
 
 export const LeagueProvider = ({ children }: { children: ReactNode }) => {
+  // --- ESTADO INICIAL SIEMPRE VACÍO ---
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -24,9 +25,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     { id: 4, name: "Cuarta División" }
   ];
 
-  // --- CARGA DE DATOS ---
+  // --- CARGA DE DATOS ESTRICTA DESDE SUPABASE ---
   const refreshData = useCallback(async () => {
     try {
+      // 1. Limpieza de posibles datos antiguos en el navegador para evitar los 70 equipos
+      localStorage.removeItem('league_teams');
+      localStorage.removeItem('league_matches');
+      localStorage.removeItem('league-data');
+
       const { data: teamsData } = await supabase
         .from('teams')
         .select('*, roster:players(*)');
@@ -36,8 +42,9 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (teamsData) setTeams(teamsData);
-      if (matchesData) setMatches(matchesData);
+      // Solo asignamos lo que viene de la base de datos real
+      setTeams(teamsData || []);
+      setMatches(matchesData || []);
     } catch (error) {
       console.error("Error al refrescar datos:", error);
     } finally {
@@ -45,23 +52,20 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  // Al montar, limpiamos el navegador y traemos solo lo de Supabase
   useEffect(() => {
     refreshData();
   }, [refreshData]);
 
-  // --- NUEVA LÓGICA: GENERACIÓN AUTOMÁTICA DE DUELOS ---
-  // Se dispara cuando detecta 2 equipos con 11 jugadores que no tienen partido
+  // --- LÓGICA: GENERACIÓN AUTOMÁTICA DE DUELOS ---
   const autoMatchmaker = useCallback(async () => {
     for (const div of divisions) {
-      // Filtramos equipos de esta división que tengan 11 o más jugadores
       const readyTeams = teams.filter(t => 
         Number(t.division_id) === div.id && 
         (t.roster?.length || 0) >= 11
       );
       
-      // Si hay al menos 2 equipos listos
       if (readyTeams.length >= 2) {
-        // Buscamos si el último equipo añadido ya tiene un partido registrado
         const lastTeam = readyTeams[readyTeams.length - 1];
         const opponent = readyTeams[readyTeams.length - 2];
 
@@ -70,7 +74,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           m.home_team_id === opponent.id || m.away_team_id === opponent.id
         );
 
-        // Si NO tienen partido, lo creamos automáticamente en Supabase
         if (!alreadyHasMatch) {
           const { error } = await supabase.from('matches').insert({
             home_team_id: opponent.id,
@@ -82,7 +85,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           });
 
           if (!error) {
-            refreshData(); // Recargamos para que aparezca el "VS"
+            refreshData();
             toast.info(`Duelo generado: ${opponent.name} vs ${lastTeam.name}`);
           }
         }
@@ -90,24 +93,18 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, matches, refreshData, divisions]);
 
-  // Vigilar cambios en los equipos para emparejar
   useEffect(() => {
     if (isLoaded && teams.length >= 2) {
       autoMatchmaker();
     }
-  }, [teams, isLoaded, autoMatchmaker]);
+  }, [teams.length, isLoaded, autoMatchmaker]);
 
 
-  // --- GESTIÓN DE EQUIPOS (SIN CAMBIOS) ---
+  // --- GESTIÓN DE EQUIPOS ---
   const addTeam = useCallback((newTeam: Team) => {
     setTeams(prev => {
       if (prev.find(t => String(t.id) === String(newTeam.id))) return prev;
-      const formattedTeam = {
-        ...newTeam,
-        badge_url: newTeam.badge_url || (newTeam as any).logo || '/placeholder-team.png',
-        roster: (newTeam.roster || []).slice(0, 20)
-      };
-      return [...prev, formattedTeam];
+      return [...prev, newTeam];
     });
   }, []);
 
@@ -121,19 +118,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const updateTeam = useCallback((updated: Team) => {
-    setTeams(prev => prev.map(t => String(t.id) === String(updated.id) ? {
-      ...updated,
-      badge_url: updated.badge_url || (updated as any).logo || '/placeholder-team.png',
-      roster: updated.roster.slice(0, 20)
-    } : t));
+    setTeams(prev => prev.map(t => String(t.id) === String(updated.id) ? updated : t));
   }, []);
 
-  // --- GESTIÓN DE JUGADORES (SIN CAMBIOS) ---
+  // --- GESTIÓN DE JUGADORES ---
   const addPlayerToTeam = useCallback((teamId: number | string, player: Player) => {
     setTeams(prev => prev.map(team => {
       if (String(team.id) === String(teamId)) {
-        if (team.roster.length >= 20) return team; 
-        if (team.roster.some(p => String(p.id) === String(player.id))) return team;
         return { ...team, roster: [...team.roster, player] };
       }
       return team;
@@ -149,7 +140,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  // --- BÚSQUEDAS Y UTILIDADES (SIN CAMBIOS) ---
+  // --- BÚSQUEDAS ---
   const getTeamById = useCallback((id: number | string) => 
     teams.find(t => String(t.id) === String(id)), [teams]);
   
@@ -160,22 +151,11 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     teams.find(t => t.roster.some(p => String(p.id) === String(pid))), [teams]);
 
   const resetLeagueData = () => {
-    if (confirm("¿Borrar todos los datos de la vista?")) {
-      setTeams([]);
-      setMatches([]);
+    if (confirm("¿Limpiar todos los datos del navegador?")) {
+      localStorage.clear();
+      window.location.reload();
     }
   };
-
-  const importLeagueData = useCallback((newData: any) => {
-    try {
-      if (!newData.teams) throw new Error("Formato inválido");
-      setTeams(newData.teams);
-      setMatches(newData.matches || []);
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }, []);
 
   return (
     <LeagueContext.Provider value={{
@@ -196,7 +176,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       getTeamOfTheWeek: (week: number) => [],
       getBestEleven: (type: string, val?: number) => [],
       resetLeagueData,
-      importLeagueData,
+      importLeagueData: (d: any) => true,
       refreshData
     }}>
       {children}
