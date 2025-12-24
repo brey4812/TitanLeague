@@ -14,7 +14,6 @@ export default function DashboardPage() {
   const { teams, players, matches, isLoaded, divisions, refreshData, getMatchEvents, getTeamById } = useContext(LeagueContext);
   const [isSimulatingAll, setIsSimulatingAll] = useState(false);
   
-  // ESTADO PARA EL MODAL DE DETALLES
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
 
   if (!isLoaded) {
@@ -41,7 +40,7 @@ export default function DashboardPage() {
         const res = await fetch("/api/match/simulate-matchday", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ divisionId: divId, week: rawRound }), // Cambiado matchday por week para coincidir con tu API
+          body: JSON.stringify({ divisionId: divId, week: rawRound }),
         });
         if (!res.ok) throw new Error(`Error en división ${divId}`);
       }
@@ -88,10 +87,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Pasamos el setter al DashboardClient para capturar el clic en los partidos */}
       <DashboardClient onMatchClick={(match: MatchResult) => setSelectedMatch(match)} />
 
-      {/* MODAL DE DETALLES DE PARTIDO (SUCESOS Y ASISTENCIAS) */}
       {selectedMatch && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
           <Card className="max-w-md w-full shadow-2xl border-t-4 border-t-blue-600 relative overflow-hidden">
@@ -125,23 +122,33 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 {getMatchEvents(selectedMatch.id).length > 0 ? (
                   getMatchEvents(selectedMatch.id).map((event) => (
-                    <div key={event.id} className="flex items-start gap-3 text-sm border-b border-slate-50 pb-2">
-                      <div className="bg-blue-600 text-white font-black text-[10px] px-2 py-0.5 rounded italic">
-                        {event.minute}'
+                    <div key={event.id} className="flex flex-col border-b border-slate-50 pb-2">
+                      <div className="flex items-start gap-3 text-sm">
+                        <div className="bg-blue-600 text-white font-black text-[10px] px-2 py-0.5 rounded italic min-w-[30px] text-center">
+                          {event.minute}'
+                        </div>
+                        <div className="flex-1">
+                          <span className="font-bold">{event.playerName}</span>
+                          {event.type === 'GOAL' && <span className="ml-2 text-base">⚽</span>}
+                          {event.type === 'YELLOW_CARD' && <span className="ml-2 text-base">🟨</span>}
+                          {event.type === 'RED_CARD' && <span className="ml-2 text-base">🟥</span>}
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <span className="font-bold">{event.playerName}</span>
-                        {event.type === 'GOAL' && <span className="ml-2">⚽</span>}
-                        {event.type === 'YELLOW_CARD' && <span className="ml-2">🟨</span>}
-                        {event.type === 'RED_CARD' && <span className="ml-2">🟥</span>}
-                        
-                        {/* MUESTRA DE ASISTENCIAS SI EXISTEN */}
-                        {event.type === 'GOAL' && (
-                          <p className="text-[10px] text-slate-500 italic mt-0.5 font-medium uppercase">
-                            Sin asistencia registrada
-                          </p>
-                        )}
-                      </div>
+
+                      {/* LÓGICA DE ASISTENCIA MEJORADA */}
+                      {event.type === 'GOAL' && (
+                        <div className="pl-11 mt-0.5">
+                          {event.assistName ? (
+                            <p className="text-[11px] text-slate-500 italic font-medium">
+                              Asistencia: <span className="text-slate-700 font-bold">{event.assistName}</span>
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-slate-300 italic uppercase tracking-tighter">
+                              Gol sin asistencia
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))
                 ) : (

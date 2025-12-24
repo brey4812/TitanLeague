@@ -64,7 +64,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- PROCESAMIENTO CON RATING DINÁMICO (BASE 6.0) ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -84,10 +83,16 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       });
 
       const updatedRoster = (team.roster || []).map(player => {
+        // Filtramos eventos donde el jugador es el protagonista
         const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
         
+        // Contamos asistencias de dos formas: por tipo de evento o por nombre en columna assist_name
         const goals = playerEvents.filter(e => e.type === 'GOAL').length;
-        const assists = playerEvents.filter(e => e.type === 'ASSIST').length;
+        const assists = matchEvents.filter(e => 
+          (e.type === 'ASSIST' && String(e.player_id) === String(player.id)) || 
+          (String((e as any).assist_name) === player.name)
+        ).length;
+
         const yellows = playerEvents.filter(e => e.type === 'YELLOW_CARD').length;
         const reds = playerEvents.filter(e => e.type === 'RED_CARD').length;
 
@@ -96,12 +101,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           return (isHome ? Number(m.away_goals) : Number(m.home_goals)) === 0;
         }).length;
 
-        // CÁLCULO DE RATING DINÁMICO
+        // RATING DINÁMICO BASE 6.0
         let currentRating = 6.0;
         currentRating += (goals * 1.5);
         currentRating += (assists * 0.8);
         currentRating -= (yellows * 0.5);
         currentRating -= (reds * 2.0);
+        
+        // Solo porteros y defensas reciben el bono por valla invicta
         if (player.position === 'Goalkeeper' || player.position === 'Defender') {
            currentRating += (cleanSheets * 1.0);
         }
@@ -123,11 +130,9 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
-  // --- ONCE IDEAL MULTI-RANGO (SEMANA, MES, AÑO) ---
   const getBestEleven = useCallback((type: string, value?: number): TeamOfTheWeekPlayer[] => {
     let filteredMatchIds: string[] = [];
 
-    // Lógica de filtrado por periodos
     if (type === 'week' && value) {
       filteredMatchIds = matches.filter(m => Number(m.round) === value && m.played).map(m => String(m.id));
     } else if (type === 'month' && value) {
@@ -146,28 +151,28 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         ...p, teamName: t.name, teamLogoUrl: t.badge_url, teamDataAiHint: t.real_team_name
       })));
 
+    // Buscamos los mejores por posición usando el rating base 6.0
     const getTopByPos = (pos: string, limit: number) => 
       candidates.filter(p => p.position === pos).sort((a, b) => b.rating - a.rating).slice(0, limit);
 
-    // Selección por formación 1-4-3-3
-    const bestEleven = [
+    const squad = [
       ...getTopByPos('Goalkeeper', 1),
       ...getTopByPos('Defender', 4),
       ...getTopByPos('Midfielder', 3),
       ...getTopByPos('Forward', 3)
     ];
 
-    // Relleno de seguridad si faltan jugadores en posiciones específicas
-    if (bestEleven.length < 11) {
-      const currentIds = bestEleven.map(p => p.id);
+    // RELLENO TOTAL: Si faltan jugadores en posiciones específicas, rellenamos con los mejores restantes
+    if (squad.length < 11) {
+      const currentIds = new Set(squad.map(p => String(p.id)));
       const fillers = candidates
-        .filter(p => !currentIds.includes(p.id))
+        .filter(p => !currentIds.has(String(p.id)))
         .sort((a, b) => b.rating - a.rating)
-        .slice(0, 11 - bestEleven.length);
-      return [...bestEleven, ...fillers] as TeamOfTheWeekPlayer[];
+        .slice(0, 11 - squad.length);
+      return [...squad, ...fillers] as TeamOfTheWeekPlayer[];
     }
 
-    return bestEleven as TeamOfTheWeekPlayer[];
+    return squad as TeamOfTheWeekPlayer[];
   }, [processedTeams, matches]);
 
   const getTeamOfTheWeek = useCallback((week: number) => getBestEleven('week', week), [getBestEleven]);
@@ -189,7 +194,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, [processedTeams]);
 
   const getMatchEvents = useCallback((matchId: string | number) => {
-    // Sincronización con nombres de columnas de Supabase
+    // Sincronización con nombres de columnas de Supabase (player_name y assist_name)
     return matchEvents
       .filter(e => String(e.match_id) === String(matchId))
       .map(e => ({
