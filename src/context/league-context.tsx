@@ -64,7 +64,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- CÁLCULO DE JORNADA SEGURA (ADIÓS NaN) ---
+  // --- UTILIDAD PARA NAVEGACIÓN SEGURA ---
   const lastPlayedWeek = useMemo(() => {
     const playedMatches = matches.filter(m => m.played);
     if (playedMatches.length === 0) return 1;
@@ -72,7 +72,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return isNaN(max) ? 1 : max;
   }, [matches]);
 
-  // --- PROCESAMIENTO ESTADÍSTICAS Y RATING DINÁMICO ---
+  // --- PROCESAMIENTO ESTADÍSTICAS Y RATING ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -94,8 +94,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const updatedRoster = (team.roster || []).map(player => {
         const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
         const goals = playerEvents.filter(e => e.type === 'GOAL').length;
-        
-        // Contamos asistencias desde la columna assist_name de Supabase
         const assists = matchEvents.filter(e => 
           (e.type === 'ASSIST' && String(e.player_id) === String(player.id)) || 
           (String((e as any).assist_name) === player.name)
@@ -175,19 +173,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   const getTeamOfTheWeek = useCallback((week: number) => getBestEleven('week', week), [getBestEleven]);
 
-  const getMatchEvents = useCallback((matchId: string | number) => {
-    return matchEvents
-      .filter(e => String(e.match_id) === String(matchId))
-      .map(e => ({
-        ...e,
-        playerName: (e as any).player_name || e.playerName,
-        assistName: (e as any).assist_name || e.assistName,
-        team_id: e.team_id // Vital para la alineación local/visitante
-      }))
-      .sort((a, b) => a.minute - b.minute);
-  }, [matchEvents]);
-
-  // Funciones restantes simplificadas para evitar errores de tipo
   const getLeagueQualifiers = useCallback((divisionId: number) => {
     const sorted = processedTeams
       .filter(t => Number(t.division_id) === divisionId)
@@ -203,6 +188,46 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       bestGoalkeeper: [...allPlayers].filter(p => p.position === 'Goalkeeper').sort((a,b) => b.stats.cleanSheets - a.stats.cleanSheets)[0]
     };
   }, [processedTeams]);
+
+  const getMatchEvents = useCallback((matchId: string | number) => {
+    return matchEvents
+      .filter(e => String(e.match_id) === String(matchId))
+      .map(e => ({
+        ...e,
+        playerName: (e as any).player_name || e.playerName,
+        assistName: (e as any).assist_name || e.assistName,
+        team_id: e.team_id // AÑADIDO PARA LA ALINEACIÓN LOCAL/VISITANTE
+      }))
+      .sort((a, b) => a.minute - b.minute);
+  }, [matchEvents]);
+
+  const autoMatchmaker = useCallback(async () => {
+    if (teams.length < 2 || !isLoaded) return;
+    for (const div of divisions) {
+      const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
+      if (divTeams.length < 2) continue;
+      const divMatches = matches.filter(m => Number(m.division_id) === div.id);
+      const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round))) : 1;
+      const currentWeek = (divMatches.length > 0 && divMatches.filter(m => Number(m.round) === lastRound && !m.played).length === 0) ? lastRound + 1 : lastRound;
+      
+      const localBusyIds = new Set(divMatches.filter(m => Number(m.round) === currentWeek).flatMap(m => [String(m.home_team), String(m.away_team)]));
+      const available = divTeams.filter(t => !localBusyIds.has(String(t.id)));
+
+      if (available.length >= 2) {
+        const shuffled = [...available].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < shuffled.length - 1; i += 2) {
+          const { data } = await supabase.from('matches').insert({
+            home_team: shuffled[i].id, away_team: shuffled[i+1].id, round: currentWeek, 
+            played: false, division_id: div.id, competition: "League", 
+            session_id: sessionId 
+          }).select();
+          if (data) setMatches(prev => [...prev, data[0]]);
+        }
+      }
+    }
+  }, [teams, matches, divisions, isLoaded, sessionId]);
+
+  useEffect(() => { if (isLoaded) autoMatchmaker(); }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
   const resetLeagueData = useCallback(async () => {
     if (confirm("¿Limpiar liga activa?")) {
@@ -225,7 +250,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       players: processedTeams.flatMap(t => t.roster || []),
       isLoaded,
       sessionId,
-      lastPlayedWeek, // SOLUCIÓN AL ERROR DEL PROVIDER
+      lastPlayedWeek, // AÑADIDO PARA EVITAR EL ERROR EN VALUE
       addTeam: (t) => setTeams(prev => [...prev, t]),
       deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))),
       updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)),
