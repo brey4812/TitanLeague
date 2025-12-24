@@ -72,7 +72,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return isNaN(max) ? 1 : max;
   }, [matches]);
 
-  // --- GENERADOR DE PARTIDOS ROUND ROBIN (IDA Y VUELTA) ---
+  // --- GENERADOR DE PARTIDOS ROUND ROBIN CORREGIDO ---
   const autoMatchmaker = useCallback(async () => {
     if (teams.length < 2 || !isLoaded || !sessionId) return;
 
@@ -92,6 +92,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       if (targetWeek > maxRounds) continue;
       if (divMatches.some(m => Number(m.round) === targetWeek)) continue;
 
+      // Equipos ya ocupados en esta jornada
       const busyIds = new Set(
         divMatches
           .filter(m => Number(m.round) === targetWeek)
@@ -100,6 +101,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const available = divTeams.filter(t => !busyIds.has(String(t.id)));
 
+      // EMPAREJAMIENTO EN BLOQUE PARA 4 EQUIPOS (2 PARTIDOS)
       if (available.length >= 2) {
         const shuffled = [...available].sort(() => Math.random() - 0.5);
         const matchesToCreate = [];
@@ -108,16 +110,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           const teamA = shuffled[i];
           const teamB = shuffled[i+1];
 
+          // Verificamos enfrentamientos totales para respetar ida y vuelta
           const timesPlayed = divMatches.filter(m => 
             (String(m.home_team) === String(teamA.id) && String(m.away_team) === String(teamB.id)) ||
             (String(m.home_team) === String(teamB.id) && String(m.away_team) === String(teamA.id))
           ).length;
 
-          const firstVueltaLimit = divTeams.length - 1;
-          const isValidEncounter = (targetWeek <= firstVueltaLimit && timesPlayed === 0) || 
-                                  (targetWeek > firstVueltaLimit && timesPlayed === 1);
-
-          if (isValidEncounter) {
+          // Si no han completado sus 2 partidos reglamentarios, los emparejamos
+          if (timesPlayed < 2) {
             matchesToCreate.push({
               home_team: teamA.id, 
               away_team: teamB.id, 
@@ -142,7 +142,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded) autoMatchmaker(); 
   }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESAMIENTO ESTADÍSTICAS ---
+  // --- PROCESAMIENTO ESTADÍSTICAS (Mantenido lo nuevo) ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -163,11 +163,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const updatedRoster = (team.roster || []).map(player => {
         const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
-        
-        // GOLES: Basado en evento GOAL
         const goals = playerEvents.filter(e => e.type === 'GOAL').length;
-        
-        // ASISTENCIAS: Basado en assist_name o eventos de asistencia
         const assists = matchEvents.filter(e => 
           (String((e as any).assist_name) === player.name) || 
           (e.type === 'ASSIST' && String(e.player_id) === String(player.id))
@@ -176,14 +172,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         const yellows = playerEvents.filter(e => e.type === 'YELLOW_CARD').length;
         const reds = playerEvents.filter(e => e.type === 'RED_CARD').length;
 
-        // VALLAS INVICTAS: Si el rival marcó 0 goles
         const cleanSheets = teamMatches.filter(m => {
           const isHome = String(m.home_team) === String(team.id);
           const goalsAgainst = isHome ? Number(m.away_goals) : Number(m.home_goals);
           return goalsAgainst === 0;
         }).length;
 
-        // Rating dinámico
         let rating = 6.0 + (goals * 1.5) + (assists * 0.8) - (yellows * 0.5) - (reds * 4.0);
         if (player.position === 'Goalkeeper' || player.position === 'Defender') rating += (cleanSheets * 1.0);
 
@@ -204,7 +198,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
-  // --- RESTO DE FUNCIONES ---
+  // --- RESTO DE FUNCIONES (Once Ideal, Eventos, Reset) ---
   const getBestEleven = useCallback((type: string, value?: number): TeamOfTheWeekPlayer[] => {
     let filteredMatchIds: string[] = [];
     if (type === 'week' && value) {
