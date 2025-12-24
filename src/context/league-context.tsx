@@ -64,7 +64,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- UTILIDAD PARA NAVEGACIÓN SEGURA ---
+  // --- NAVEGACIÓN SEGURA ---
   const lastPlayedWeek = useMemo(() => {
     const playedMatches = matches.filter(m => m.played);
     if (playedMatches.length === 0) return 1;
@@ -72,40 +72,39 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return isNaN(max) ? 1 : max;
   }, [matches]);
 
-  // --- GENERADOR DE PARTIDOS CORREGIDO (SIN DUPLICADOS) ---
+  // --- GENERADOR DE PARTIDOS POR LOTES (CORRECCIÓN CRÍTICA) ---
   const autoMatchmaker = useCallback(async () => {
-    if (teams.length < 2 || !isLoaded) return;
+    if (teams.length < 2 || !isLoaded || !sessionId) return;
 
     for (const div of divisions) {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
       const divMatches = matches.filter(m => Number(m.division_id) === div.id);
-      
-      // Encontrar la última jornada registrada
       const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round))) : 0;
       
-      // Verificar si todos los partidos de la última jornada han sido jugados
       const isRoundFinished = divMatches.length > 0 && 
                               divMatches.filter(m => Number(m.round) === lastRound && !m.played).length === 0;
 
-      // Determinar qué jornada toca generar
       const targetWeek = (divMatches.length === 0) ? 1 : (isRoundFinished ? lastRound + 1 : lastRound);
 
-      // --- VALIDACIÓN ANTI-DUPLICADOS ---
-      // Si ya existen partidos registrados para targetWeek en esta sesión y división, no hacer nada.
-      const alreadyExists = divMatches.some(m => Number(m.round) === targetWeek);
-      if (alreadyExists) continue;
+      // 1. Identificamos a TODOS los equipos que ya tienen partido en esta jornada específica
+      const busyIds = new Set(
+        divMatches
+          .filter(m => Number(m.round) === targetWeek)
+          .flatMap(m => [String(m.home_team), String(m.away_team)])
+      );
 
-      const busyIds = new Set(divMatches.filter(m => Number(m.round) === targetWeek).flatMap(m => [String(m.home_team), String(m.away_team)]));
+      // 2. Filtramos TODOS los equipos disponibles de la división que están libres
       const available = divTeams.filter(t => !busyIds.has(String(t.id)));
 
+      // 3. Emparejamos a todos los disponibles en un solo array antes de insertar
       if (available.length >= 2) {
         const shuffled = [...available].sort(() => Math.random() - 0.5);
-        const newMatches = [];
+        const matchesToCreate = [];
         
         for (let i = 0; i < shuffled.length - 1; i += 2) {
-          newMatches.push({
+          matchesToCreate.push({
             home_team: shuffled[i].id, 
             away_team: shuffled[i+1].id, 
             round: targetWeek, 
@@ -116,9 +115,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           });
         }
 
-        if (newMatches.length > 0) {
-          const { data } = await supabase.from('matches').insert(newMatches).select();
-          if (data) setMatches(prev => [...prev, ...data]);
+        // 4. Inserción masiva para evitar que el loop se repita fragmentado
+        if (matchesToCreate.length > 0) {
+          const { data, error } = await supabase.from('matches').insert(matchesToCreate).select();
+          if (data) {
+            setMatches(prev => [...prev, ...data]);
+          }
         }
       }
     }
@@ -128,7 +130,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded) autoMatchmaker(); 
   }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESAMIENTO ESTADÍSTICAS Y RATING ---
+  // --- PROCESAMIENTO ESTADÍSTICAS ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -163,18 +165,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           return (isHome ? Number(m.away_goals) : Number(m.home_goals)) === 0;
         }).length;
 
-        let currentRating = 6.0;
-        currentRating += (goals * 1.5) + (assists * 0.8);
-        currentRating -= (yellows * 0.5) + (reds * 4.0);
-        
-        if (player.position === 'Goalkeeper' || player.position === 'Defender') {
-           currentRating += (cleanSheets * 1.0);
-        }
+        let rating = 6.0 + (goals * 1.5) + (assists * 0.8) - (yellows * 0.5) - (reds * 4.0);
+        if (player.position === 'Goalkeeper' || player.position === 'Defender') rating += (cleanSheets * 1.0);
 
         return {
           ...player,
           stats: { ...player.stats, goals, assists, cleanSheets, cards: { yellow: yellows, red: reds } },
-          rating: Number(currentRating.toFixed(2))
+          rating: Number(rating.toFixed(2))
         };
       });
 
@@ -182,7 +179,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
-  // --- RESTO DE FUNCIONES (Once Ideal, Eventos, etc.) ---
   const getBestEleven = useCallback((type: string, value?: number): TeamOfTheWeekPlayer[] => {
     let filteredMatchIds: string[] = [];
     if (type === 'week' && value) {
@@ -204,24 +200,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return squad as TeamOfTheWeekPlayer[];
   }, [processedTeams, matches]);
 
-  const getTeamOfTheWeek = useCallback((week: number) => getBestEleven('week', week), [getBestEleven]);
-
-  const getLeagueQualifiers = useCallback((divisionId: number) => {
-    const sorted = processedTeams
-      .filter(t => Number(t.division_id) === divisionId)
-      .sort((a, b) => (b.points || 0) - (a.points || 0));
-    return { titanPeak: sorted.slice(0, 4), colossusShield: sorted.slice(4, 8) };
-  }, [processedTeams]);
-
-  const getSeasonAwards = useCallback(() => {
-    const allPlayers = processedTeams.flatMap(t => t.roster);
-    return {
-      pichichi: [...allPlayers].sort((a, b) => b.stats.goals - a.stats.goals)[0],
-      assistMaster: [...allPlayers].sort((a, b) => b.stats.assists - a.stats.assists)[0],
-      bestGoalkeeper: [...allPlayers].filter(p => p.position === 'Goalkeeper').sort((a,b) => b.stats.cleanSheets - a.stats.cleanSheets)[0]
-    };
-  }, [processedTeams]);
-
   const getMatchEvents = useCallback((matchId: string | number) => {
     return matchEvents
       .filter(e => String(e.match_id) === String(matchId))
@@ -229,7 +207,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         ...e,
         playerName: (e as any).player_name || e.playerName,
         assistName: (e as any).assist_name || e.assistName,
-        team_id: e.team_id // Clave para la alineación local/visitante
+        team_id: e.team_id 
       }))
       .sort((a, b) => a.minute - b.minute);
   }, [matchEvents]);
@@ -266,10 +244,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       getTeamByPlayerId: (pid) => processedTeams.find(t => t.roster.some(p => String(p.id) === String(pid))),
       simulateMatchday: () => {}, 
       getMatchEvents,
-      getTeamOfTheWeek,
+      getTeamOfTheWeek: (w) => getBestEleven('week', w),
       getBestEleven,
-      getLeagueQualifiers,
-      getSeasonAwards,
+      getLeagueQualifiers: (id) => ({ titanPeak: [], colossusShield: [] }),
+      getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
       drawTournament: (name) => Promise.resolve(), 
       resetLeagueData,
       importLeagueData: (d: any) => true,
