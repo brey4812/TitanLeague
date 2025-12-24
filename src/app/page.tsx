@@ -13,7 +13,6 @@ import { MatchResult } from '@/lib/types';
 export default function DashboardPage() {
   const { teams, players, matches, isLoaded, divisions, refreshData, getMatchEvents, getTeamById } = useContext(LeagueContext);
   const [isSimulatingAll, setIsSimulatingAll] = useState(false);
-  
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
 
   if (!isLoaded) {
@@ -91,69 +90,99 @@ export default function DashboardPage() {
 
       {selectedMatch && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-          <Card className="max-w-md w-full shadow-2xl border-t-4 border-t-blue-600 relative overflow-hidden">
+          <Card className="max-w-lg w-full shadow-2xl border-t-4 border-t-blue-600 relative overflow-hidden bg-white">
             <Button 
               variant="ghost" 
               size="icon" 
-              className="absolute top-2 right-2 rounded-full" 
+              className="absolute top-2 right-2 rounded-full z-10" 
               onClick={() => setSelectedMatch(null)}
             >
               <X className="h-4 w-4" />
             </Button>
 
-            <CardHeader className="text-center pb-2 bg-slate-50">
-              <CardTitle className="text-xs font-black uppercase tracking-tighter text-slate-400">Resumen del Partido</CardTitle>
-              <div className="flex items-center justify-between mt-4 gap-2">
-                <div className="flex-1 text-center">
-                  <img src={getTeamById(selectedMatch.home_team)?.badge_url} className="h-14 w-14 mx-auto object-contain" />
-                  <p className="text-[10px] font-black uppercase mt-1 leading-tight">{getTeamById(selectedMatch.home_team)?.name}</p>
+            <CardHeader className="text-center pb-6 bg-slate-50 border-b">
+              <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Resumen del Partido</CardTitle>
+              <div className="flex items-center justify-between px-4">
+                <div className="flex-1 flex flex-col items-center">
+                  <img src={getTeamById(selectedMatch.home_team)?.badge_url} className="h-16 w-16 object-contain" alt="" />
+                  <p className="text-[11px] font-black uppercase mt-2 leading-tight max-w-[100px]">{getTeamById(selectedMatch.home_team)?.name}</p>
                 </div>
-                <div className="text-4xl font-black italic tracking-tighter bg-slate-200 px-4 py-1 rounded-lg">
-                  {selectedMatch.home_goals} - {selectedMatch.away_goals}
+                <div className="px-6 py-2 bg-slate-900 text-white rounded-xl shadow-lg">
+                  <span className="text-4xl font-black italic tracking-tighter">
+                    {selectedMatch.home_goals} - {selectedMatch.away_goals}
+                  </span>
                 </div>
-                <div className="flex-1 text-center">
-                  <img src={getTeamById(selectedMatch.away_team)?.badge_url} className="h-14 w-14 mx-auto object-contain" />
-                  <p className="text-[10px] font-black uppercase mt-1 leading-tight">{getTeamById(selectedMatch.away_team)?.name}</p>
+                <div className="flex-1 flex flex-col items-center">
+                  <img src={getTeamById(selectedMatch.away_team)?.badge_url} className="h-16 w-16 object-contain" alt="" />
+                  <p className="text-[11px] font-black uppercase mt-2 leading-tight max-w-[100px]">{getTeamById(selectedMatch.away_team)?.name}</p>
                 </div>
               </div>
             </CardHeader>
 
-            <CardContent className="pt-6 space-y-4 max-h-[400px] overflow-y-auto">
-              <div className="space-y-3">
+            <CardContent className="pt-8 pb-10 px-6 max-h-[500px] overflow-y-auto bg-white relative">
+              {/* Línea central cronológica */}
+              <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-100 -translate-x-1/2 hidden sm:block" />
+
+              <div className="space-y-8 relative">
                 {getMatchEvents(selectedMatch.id).length > 0 ? (
-                  getMatchEvents(selectedMatch.id).map((event) => (
-                    <div key={event.id} className="flex flex-col border-b border-slate-50 pb-2">
-                      <div className="flex items-start gap-3 text-sm">
-                        <div className="bg-blue-600 text-white font-black text-[10px] px-2 py-0.5 rounded italic min-w-[30px] text-center">
-                          {event.minute}'
-                        </div>
-                        <div className="flex-1">
-                          <span className="font-bold">{event.playerName}</span>
-                          {event.type === 'GOAL' && <span className="ml-2 text-base">⚽</span>}
-                          {event.type === 'YELLOW_CARD' && <span className="ml-2 text-base">🟨</span>}
-                          {event.type === 'RED_CARD' && <span className="ml-2 text-base">🟥</span>}
+                  getMatchEvents(selectedMatch.id).map((event) => {
+                    // Lógica para determinar el lado del evento
+                    const isHomeEvent = String(event.team_id) === String(selectedMatch.home_team);
+
+                    return (
+                      <div 
+                        key={event.id} 
+                        className={`flex items-center w-full ${isHomeEvent ? 'justify-start' : 'justify-end'}`}
+                      >
+                        <div className={`flex items-center gap-4 max-w-[48%] ${isHomeEvent ? 'flex-row' : 'flex-row-reverse text-right'}`}>
+                          
+                          {/* Minuto */}
+                          <span className="text-[10px] font-black text-slate-400 italic min-w-[28px]">
+                            {event.minute}'
+                          </span>
+
+                          {/* Icono del Evento */}
+                          <div className="shrink-0 z-10">
+                            {event.type === 'GOAL' && (
+                              <div className="bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm border border-slate-200">
+                                <span className="text-sm">⚽</span>
+                              </div>
+                            )}
+                            {event.type === 'YELLOW_CARD' && (
+                              <div className="w-3.5 h-5 bg-amber-400 rounded-[2px] shadow-sm border border-amber-500/20" />
+                            )}
+                            {event.type === 'RED_CARD' && (
+                              <div className="w-3.5 h-5 bg-red-500 rounded-[2px] shadow-sm border border-red-600/20" />
+                            )}
+                          </div>
+
+                          {/* Información del Jugador y Asistencia */}
+                          <div className="flex flex-col overflow-hidden">
+                            <span className="text-sm font-black text-slate-900 truncate tracking-tight">
+                              {event.player_name || event.playerName}
+                            </span>
+                            
+                            {event.type === 'GOAL' && (
+                              <div className={`mt-0.5 ${isHomeEvent ? 'text-left' : 'text-right'}`}>
+                                {event.assist_name || (event as any).assistName ? (
+                                  <p className="text-[10px] text-slate-500 italic font-bold leading-none">
+                                    Asist: {event.assist_name || (event as any).assistName}
+                                  </p>
+                                ) : (
+                                  <p className="text-[9px] text-slate-300 font-bold uppercase tracking-tighter">
+                                    Sin asistencia
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-
-                      {/* LÓGICA DE ASISTENCIA MEJORADA */}
-                      {event.type === 'GOAL' && (
-                        <div className="pl-11 mt-0.5">
-                          {event.assistName ? (
-                            <p className="text-[11px] text-slate-500 italic font-medium">
-                              Asistencia: <span className="text-slate-700 font-bold">{event.assistName}</span>
-                            </p>
-                          ) : (
-                            <p className="text-[10px] text-slate-300 italic uppercase tracking-tighter">
-                              Gol sin asistencia
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
-                  <div className="text-center py-8 text-slate-400 italic text-sm font-medium">
-                    No hubo eventos destacados en este partido.
+                  <div className="text-center py-12 text-slate-400 italic text-sm font-bold uppercase tracking-widest opacity-40">
+                    Sin eventos destacados
                   </div>
                 )}
               </div>

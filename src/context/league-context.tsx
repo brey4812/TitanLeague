@@ -64,6 +64,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
+  // --- PROCESAMIENTO ESTADÍSTICAS, SANCIONES Y RATING ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -83,11 +84,11 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       });
 
       const updatedRoster = (team.roster || []).map(player => {
-        // Filtramos eventos donde el jugador es el protagonista
         const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
         
-        // Contamos asistencias de dos formas: por tipo de evento o por nombre en columna assist_name
         const goals = playerEvents.filter(e => e.type === 'GOAL').length;
+        
+        // Contamos asistencias desde la columna assist_name de la DB
         const assists = matchEvents.filter(e => 
           (e.type === 'ASSIST' && String(e.player_id) === String(player.id)) || 
           (String((e as any).assist_name) === player.name)
@@ -96,19 +97,20 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         const yellows = playerEvents.filter(e => e.type === 'YELLOW_CARD').length;
         const reds = playerEvents.filter(e => e.type === 'RED_CARD').length;
 
+        // Vallas invictas corregidas
         const cleanSheets = teamMatches.filter(m => {
           const isHome = String(m.home_team) === String(team.id);
-          return (isHome ? Number(m.away_goals) : Number(m.home_goals)) === 0;
+          const goalsAgainst = isHome ? Number(m.away_goals) : Number(m.home_goals);
+          return goalsAgainst === 0;
         }).length;
 
-        // RATING DINÁMICO BASE 6.0
+        // RATING DINÁMICO (Sanción por Roja fuerte)
         let currentRating = 6.0;
         currentRating += (goals * 1.5);
         currentRating += (assists * 0.8);
         currentRating -= (yellows * 0.5);
-        currentRating -= (reds * 2.0);
+        currentRating -= (reds * 4.0); // Penalización masiva para no salir en el 11
         
-        // Solo porteros y defensas reciben el bono por valla invicta
         if (player.position === 'Goalkeeper' || player.position === 'Defender') {
            currentRating += (cleanSheets * 1.0);
         }
@@ -130,6 +132,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
+  // --- ONCE IDEAL CON FILTRO DE EXPULSADOS ---
   const getBestEleven = useCallback((type: string, value?: number): TeamOfTheWeekPlayer[] => {
     let filteredMatchIds: string[] = [];
 
@@ -145,13 +148,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
     const teamIdsInPeriod = matches.filter(m => filteredMatchIds.includes(String(m.id))).flatMap(m => [String(m.home_team), String(m.away_team)]);
 
+    // Solo candidatos que NO tengan roja o suspensión
     const candidates = processedTeams
       .filter(t => teamIdsInPeriod.includes(String(t.id)))
       .flatMap(t => (t.roster || []).map(p => ({
         ...p, teamName: t.name, teamLogoUrl: t.badge_url, teamDataAiHint: t.real_team_name
-      })));
+      })))
+      .filter(p => p.stats.cards.red === 0); // Excluir expulsados
 
-    // Buscamos los mejores por posición usando el rating base 6.0
     const getTopByPos = (pos: string, limit: number) => 
       candidates.filter(p => p.position === pos).sort((a, b) => b.rating - a.rating).slice(0, limit);
 
@@ -162,7 +166,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       ...getTopByPos('Forward', 3)
     ];
 
-    // RELLENO TOTAL: Si faltan jugadores en posiciones específicas, rellenamos con los mejores restantes
     if (squad.length < 11) {
       const currentIds = new Set(squad.map(p => String(p.id)));
       const fillers = candidates
@@ -194,7 +197,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, [processedTeams]);
 
   const getMatchEvents = useCallback((matchId: string | number) => {
-    // Sincronización con nombres de columnas de Supabase (player_name y assist_name)
     return matchEvents
       .filter(e => String(e.match_id) === String(matchId))
       .map(e => ({
@@ -215,6 +217,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const currentWeek = (divMatches.length > 0 && divMatches.filter(m => Number(m.round) === lastRound && !m.played).length === 0) ? lastRound + 1 : lastRound;
       
       const localBusyIds = new Set(divMatches.filter(m => Number(m.round) === currentWeek).flatMap(m => [String(m.home_team), String(m.away_team)]));
+      
+      // EXCLUIR JUGADORES SANCIONADOS DEL AUTO-MATCHMAKER (Opcional visual)
       const available = divTeams.filter(t => !localBusyIds.has(String(t.id)));
 
       if (available.length >= 2) {

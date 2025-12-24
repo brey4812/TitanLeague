@@ -9,7 +9,7 @@ export interface Player {
   country?: string; 
   face_url?: string; 
   rating: number;
-  team_id?: number | string; // Añadido para facilitar filtrado
+  team_id?: number | string; 
   stats: {
     goals: number;
     assists: number;
@@ -54,12 +54,18 @@ export interface MatchEvent {
   id: number;
   match_id: number | string;
   player_id: number | string;
+  // Soporte para ambos formatos (Frontend y Supabase) para evitar errores
   playerName?: string;
-  assistName?: string; // Añadido para mostrar quién asistió en el modal
+  player_name?: string; 
+  assistName?: string; 
+  assist_name?: string;
+  // Campos para sustituciones
+  playerOutName?: string;
+  player_out_name?: string;
   team_id?: number | string;
-  type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST';
+  type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST' | 'SUBSTITUTION'; // Añadido SUB
   minute: number;
-  session_id?: string; // Coincide con tu columna en Supabase
+  session_id?: string; 
 }
 
 export interface MatchResult {
@@ -74,7 +80,7 @@ export interface MatchResult {
   played: boolean; 
   division_id: number;
   competition?: string; 
-  session_id?: string; // Coincide con tu columna en Supabase
+  session_id?: string; 
   homeTeamId?: number | string;
   awayTeamId?: number | string;
   homeScore?: number;
@@ -97,7 +103,7 @@ export interface LeagueContextType {
   matchEvents: MatchEvent[];
   players: Player[];
   isLoaded: boolean;
-  sessionId: string; // PROPIEDAD CRÍTICA AÑADIDA PARA ELIMINAR EL ERROR
+  sessionId: string; 
   addTeam: (team: Team) => void;
   deleteTeam: (id: number | string) => void;
   updateTeam: (team: Team) => void;
