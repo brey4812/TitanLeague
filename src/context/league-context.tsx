@@ -45,12 +45,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
         supabase.from('matches').select('*').eq('session_id', sessionId).order('round', { ascending: true }),
         supabase.from('match_events').select('*').eq('session_id', sessionId),
-        // CORRECCIÓN 1: Sincronización exacta con el nombre 'season_num' de tu DB
-        supabase.from('seasons').select('season_num').eq('is_active', true).maybeSingle()
+        // CORRECCIÓN: Usando 'season_number' según tu confirmación y captura
+        supabase.from('seasons').select('season_number').eq('is_active', true).maybeSingle()
       ]);
       
       if (seasonRes.data) {
-        setCurrentSeason(Number(seasonRes.data.season_num) || 1);
+        // Sincronizamos con el nombre de columna correcto para evitar Error 400
+        setCurrentSeason(Number(seasonRes.data.season_number) || 1);
       } else if (matchesRes.data && matchesRes.data.length > 0) {
         const seasons = matchesRes.data.map((m: any) => Number(m.season) || 1);
         setCurrentSeason(Math.max(...seasons));
@@ -67,7 +68,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
-  // --- MOTOR DE PARTIDOS BERGER ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId) return;
 
@@ -118,15 +118,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, matches, divisions, isLoaded, sessionId, currentSeason]);
 
-  // Delay de hidratación para evitar errores #310
   useEffect(() => { 
     const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 1200);
     return () => clearTimeout(timer);
   }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESAMIENTO ESTADÍSTICAS PROTEGIDO ---
   const processedTeams = useMemo(() => {
-    // CORRECCIÓN 2: Protección contra discrepancia de hidratación (Evita Error #310)
+    // Protección contra Error #310: No procesar hasta que los datos de Supabase estén listos
     if (!isLoaded || teams.length === 0) return [];
 
     return teams.map(team => {
@@ -162,7 +160,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents, currentSeason, isLoaded]);
 
-  // --- CLASIFICACIÓN Y TORNEOS ---
   const getLeagueQualifiers = useCallback((divisionId: number) => {
     const divTeams = processedTeams
       .filter(t => Number(t.division_id) === divisionId)
@@ -175,7 +172,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, [processedTeams]);
 
   const drawTournament = useCallback(async (competitionName: string) => {
-    // Lógica para sorteo (Copa del Rey / Supercopa)
     if (!sessionId || teams.length < 4) return;
     let participants: Team[] = [];
 
@@ -217,22 +213,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return Math.max(...playedMatches.map(m => Number(m.round || 0)));
   }, [matches, currentSeason]);
 
-  const resetLeagueData = useCallback(async () => {
-    if (confirm("¿Limpiar liga?")) {
-      await supabase.from('match_events').delete().eq('session_id', sessionId);
-      await supabase.from('matches').delete().eq('session_id', sessionId);
-      localStorage.removeItem('league_active_teams');
-      window.location.reload();
-    }
-  }, [sessionId]);
-
   return (
     <LeagueContext.Provider value={{
       teams: processedTeams, divisions, matches, matchEvents, players: processedTeams.flatMap(t => t.roster || []), isLoaded, sessionId, lastPlayedWeek,
       season: currentSeason, nextSeason: () => setCurrentSeason(prev => prev + 1),
-      addTeam: (t) => setTeams(prev => [...prev, t]), deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))), updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)), addPlayerToTeam: (tid, p) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: [...t.roster, p]} : t)), removePlayerFromTeam: (tid, pid) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: t.roster.filter(p => String(p.id) !== String(pid))} : t)), getTeamById: (id) => processedTeams.find(t => String(t.id) === String(id)), getPlayerById: (id) => processedTeams.flatMap(t => t.roster).find(p => String(p.id) === String(id)), getTeamByPlayerId: (pid) => processedTeams.find(t => t.roster.some(p => String(p.id) === String(pid))), simulateMatchday: () => {}, getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)), getTeamOfTheWeek: (w) => getBestEleven('week', w), getBestEleven, 
-      getLeagueQualifiers, drawTournament,
-      getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }), resetLeagueData, importLeagueData: (d: any) => true, refreshData
+      addTeam: (t) => setTeams(prev => [...prev, t]), deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))), updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)), addPlayerToTeam: (tid, p) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: [...t.roster, p]} : t)), removePlayerFromTeam: (tid, pid) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: t.roster.filter(p => String(p.id) !== String(pid))} : t)), getTeamById: (id) => processedTeams.find(t => String(t.id) === String(id)), getPlayerById: (id) => processedTeams.flatMap(t => t.roster).find(p => String(p.id) === String(id)), getTeamByPlayerId: (pid) => processedTeams.find(t => t.roster.some(p => String(p.id) === String(pid))), simulateMatchday: () => {}, getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)), getTeamOfTheWeek: (w) => getBestEleven('week', w), getBestEleven, getLeagueQualifiers, drawTournament,
+      getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }), resetLeagueData: async () => { if (confirm("¿Limpiar liga?")) { await supabase.from('match_events').delete().eq('session_id', sessionId); await supabase.from('matches').delete().eq('session_id', sessionId); localStorage.removeItem('league_active_teams'); window.location.reload(); } }, importLeagueData: (d: any) => true, refreshData
     }}>
       {children}
     </LeagueContext.Provider>
