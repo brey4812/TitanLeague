@@ -64,7 +64,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- PROCESAMIENTO ESTADÍSTICAS Y RATING DINÁMICO (BASE 6.0) ---
+  // --- PROCESAMIENTO CON RATING DINÁMICO (BASE 6.0) ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -86,19 +86,17 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const updatedRoster = (team.roster || []).map(player => {
         const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
         
-        // Estadísticas acumuladas
         const goals = playerEvents.filter(e => e.type === 'GOAL').length;
         const assists = playerEvents.filter(e => e.type === 'ASSIST').length;
         const yellows = playerEvents.filter(e => e.type === 'YELLOW_CARD').length;
         const reds = playerEvents.filter(e => e.type === 'RED_CARD').length;
 
-        // Porterías a cero (solo porteros/defensas influyen en rating)
         const cleanSheets = teamMatches.filter(m => {
           const isHome = String(m.home_team) === String(team.id);
           return (isHome ? Number(m.away_goals) : Number(m.home_goals)) === 0;
         }).length;
 
-        // LÓGICA DE VALORACIÓN (Base 6.0)
+        // CÁLCULO DE RATING DINÁMICO
         let currentRating = 6.0;
         currentRating += (goals * 1.5);
         currentRating += (assists * 0.8);
@@ -125,13 +123,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
-  // --- ONCE IDEAL (SEMANA, MES, AÑO) ---
+  // --- ONCE IDEAL MULTI-RANGO (SEMANA, MES, AÑO) ---
   const getBestEleven = useCallback((type: string, value?: number): TeamOfTheWeekPlayer[] => {
-    // 1. Filtrar jugadores candidatos que jugaron en el periodo
     let filteredMatchIds: string[] = [];
 
+    // Lógica de filtrado por periodos
     if (type === 'week' && value) {
-      filteredMatchIds = matches.filter(m => m.round === value && m.played).map(m => String(m.id));
+      filteredMatchIds = matches.filter(m => Number(m.round) === value && m.played).map(m => String(m.id));
     } else if (type === 'month' && value) {
       const start = (value - 1) * 4 + 1;
       const end = value * 4;
@@ -148,10 +146,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         ...p, teamName: t.name, teamLogoUrl: t.badge_url, teamDataAiHint: t.real_team_name
       })));
 
-    // 2. Selección por posición (1-4-3-3)
     const getTopByPos = (pos: string, limit: number) => 
       candidates.filter(p => p.position === pos).sort((a, b) => b.rating - a.rating).slice(0, limit);
 
+    // Selección por formación 1-4-3-3
     const bestEleven = [
       ...getTopByPos('Goalkeeper', 1),
       ...getTopByPos('Defender', 4),
@@ -159,7 +157,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       ...getTopByPos('Forward', 3)
     ];
 
-    // 3. Relleno de seguridad si faltan posiciones específicas
+    // Relleno de seguridad si faltan jugadores en posiciones específicas
     if (bestEleven.length < 11) {
       const currentIds = bestEleven.map(p => p.id);
       const fillers = candidates
@@ -191,7 +189,15 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, [processedTeams]);
 
   const getMatchEvents = useCallback((matchId: string | number) => {
-    return matchEvents.filter(e => String(e.match_id) === String(matchId)).sort((a, b) => a.minute - b.minute);
+    // Sincronización con nombres de columnas de Supabase
+    return matchEvents
+      .filter(e => String(e.match_id) === String(matchId))
+      .map(e => ({
+        ...e,
+        playerName: (e as any).player_name || e.playerName,
+        assistName: (e as any).assist_name || e.assistName
+      }))
+      .sort((a, b) => a.minute - b.minute);
   }, [matchEvents]);
 
   const autoMatchmaker = useCallback(async () => {
@@ -254,7 +260,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       simulateMatchday: () => {}, 
       getMatchEvents,
       getTeamOfTheWeek,
-      getBestEleven, // Ahora soporta tipo y valor
+      getBestEleven,
       getLeagueQualifiers,
       getSeasonAwards,
       drawTournament: (name) => Promise.resolve(), 

@@ -8,7 +8,6 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
-    // 1. Recibimos el sessionId para garantizar que la simulación sea privada
     const { divisionId, week, sessionId } = await req.json();
 
     if (!divisionId || !week || !sessionId) {
@@ -18,7 +17,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Buscamos partidos pendientes para esta sesión y jornada
     const { data: matches, error: matchError } = await supabase
       .from("matches")
       .select("id, home_team, away_team")
@@ -32,7 +30,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, message: "No hay partidos pendientes." });
     }
 
-    // Obtenemos los jugadores de los equipos involucrados
     const teamIds = matches.flatMap(m => [m.home_team, m.away_team]);
     const { data: allPlayers, error: playerError } = await supabase
       .from("players")
@@ -45,7 +42,6 @@ export async function POST(req: Request) {
       const homeGoals = Math.floor(Math.random() * 5); 
       const awayGoals = Math.floor(Math.random() * 4); 
 
-      // 3. Actualizar el marcador del partido
       await supabase
         .from("matches")
         .update({
@@ -59,25 +55,24 @@ export async function POST(req: Request) {
       const homeRoster = allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [];
       const awayRoster = allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || [];
 
-      // Función para generar sucesos (Goles, Asistencias, Tarjetas)
-      const generateEvents = (roster: any[], goals: number) => {
+      const generateTeamEvents = (roster: any[], goals: number) => {
         if (roster.length === 0) return;
 
         for (let i = 0; i < goals; i++) {
           const minute = Math.floor(Math.random() * 90) + 1;
           const scorer = roster[Math.floor(Math.random() * roster.length)];
           
-          let assistantName = null;
+          let assistant_name = null;
 
           // Lógica de Asistencia (70% de probabilidad)
           if (Math.random() < 0.7 && roster.length > 1) {
             const assistant = roster.filter(p => p.id !== scorer.id)[Math.floor(Math.random() * (roster.length - 1))];
-            assistantName = assistant.name;
+            assistant_name = assistant.name;
             
             events.push({
               match_id: match.id,
               player_id: assistant.id,
-              playerName: assistant.name,
+              player_name: assistant.name, // Ajustado a snake_case según tu DB
               type: 'ASSIST',
               minute,
               session_id: sessionId
@@ -88,8 +83,8 @@ export async function POST(req: Request) {
           events.push({
             match_id: match.id,
             player_id: scorer.id,
-            playerName: scorer.name,
-            assistName: assistantName, // Vinculamos el nombre del asistente para el modal
+            player_name: scorer.name, // Ajustado a snake_case según tu DB
+            assist_name: assistant_name, // Ajustado a snake_case según tu DB
             type: 'GOAL',
             minute,
             session_id: sessionId
@@ -99,12 +94,12 @@ export async function POST(req: Request) {
         // LÓGICA DE TARJETAS (40% de probabilidad por equipo)
         if (Math.random() < 0.4) {
           const penalized = roster[Math.floor(Math.random() * roster.length)];
-          const isRed = Math.random() < 0.15; // 15% de que sea roja directa
+          const isRed = Math.random() < 0.15; 
           
           events.push({
             match_id: match.id,
             player_id: penalized.id,
-            playerName: penalized.name,
+            player_name: penalized.name, // Ajustado a snake_case según tu DB
             type: isRed ? 'RED_CARD' : 'YELLOW_CARD',
             minute: Math.floor(Math.random() * 90) + 1,
             session_id: sessionId
@@ -112,10 +107,9 @@ export async function POST(req: Request) {
         }
       };
 
-      generateEvents(homeRoster, homeGoals);
-      generateEvents(awayRoster, awayGoals);
+      generateTeamEvents(homeRoster, homeGoals);
+      generateTeamEvents(awayRoster, awayGoals);
 
-      // 4. Inserción masiva de eventos
       if (events.length > 0) {
         const { error: insertError } = await supabase.from("match_events").insert(events);
         if (insertError) console.error("Error insertando eventos:", insertError.message);
@@ -124,7 +118,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ 
       ok: true, 
-      message: `Simulación exitosa: ${matches.length} partidos y sus sucesos registrados.` 
+      message: `Simulación exitosa.` 
     });
 
   } catch (err: any) {
