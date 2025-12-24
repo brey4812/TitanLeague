@@ -72,7 +72,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return isNaN(max) ? 1 : max;
   }, [matches]);
 
-  // --- GENERADOR DE PARTIDOS ROUND ROBIN CORREGIDO ---
+  // --- GENERADOR DE PARTIDOS CON REINTENTOS (Arreglado el error de tipo y emparejamiento) ---
   const autoMatchmaker = useCallback(async () => {
     if (teams.length < 2 || !isLoaded || !sessionId) return;
 
@@ -92,7 +92,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       if (targetWeek > maxRounds) continue;
       if (divMatches.some(m => Number(m.round) === targetWeek)) continue;
 
-      // Equipos ya ocupados en esta jornada
       const busyIds = new Set(
         divMatches
           .filter(m => Number(m.round) === targetWeek)
@@ -101,38 +100,50 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const available = divTeams.filter(t => !busyIds.has(String(t.id)));
 
-      // EMPAREJAMIENTO EN BLOQUE PARA 4 EQUIPOS (2 PARTIDOS)
       if (available.length >= 2) {
-        const shuffled = [...available].sort(() => Math.random() - 0.5);
-        const matchesToCreate = [];
-        
-        for (let i = 0; i < shuffled.length - 1; i += 2) {
-          const teamA = shuffled[i];
-          const teamB = shuffled[i+1];
+        // CORRECCIÓN DE TIPO: Definimos el array como any[] para evitar errores de tipo 'never'
+        let matchesToCreate: any[] = []; 
+        let attempts = 0;
+        const maxAttempts = 15; 
 
-          // Verificamos enfrentamientos totales para respetar ida y vuelta
-          const timesPlayed = divMatches.filter(m => 
-            (String(m.home_team) === String(teamA.id) && String(m.away_team) === String(teamB.id)) ||
-            (String(m.home_team) === String(teamB.id) && String(m.away_team) === String(teamA.id))
-          ).length;
+        // Solo aceptamos si logramos emparejar a todos los equipos libres (2 partidos para 4 equipos)
+        while (matchesToCreate.length < Math.floor(available.length / 2) && attempts < maxAttempts) {
+          const shuffled = [...available].sort(() => Math.random() - 0.5);
+          const tempBatch: any[] = [];
+          
+          for (let i = 0; i < shuffled.length - 1; i += 2) {
+            const tA = shuffled[i];
+            const tB = shuffled[i+1];
 
-          // Si no han completado sus 2 partidos reglamentarios, los emparejamos
-          if (timesPlayed < 2) {
-            matchesToCreate.push({
-              home_team: teamA.id, 
-              away_team: teamB.id, 
-              round: targetWeek, 
-              played: false, 
-              division_id: div.id, 
-              competition: "League", 
-              session_id: sessionId 
-            });
+            const timesPlayed = divMatches.filter(m => 
+              (String(m.home_team) === String(tA.id) && String(m.away_team) === String(tB.id)) ||
+              (String(m.home_team) === String(tB.id) && String(m.away_team) === String(tA.id))
+            ).length;
+
+            // Verificamos el límite de Ida y Vuelta
+            if (timesPlayed < 2) {
+              tempBatch.push({
+                home_team: tA.id, 
+                away_team: tB.id, 
+                round: targetWeek, 
+                played: false, 
+                division_id: div.id, 
+                competition: "League", 
+                session_id: sessionId 
+              });
+            }
           }
+          
+          if (tempBatch.length >= Math.floor(available.length / 2)) {
+            matchesToCreate = tempBatch;
+          }
+          attempts++;
         }
 
         if (matchesToCreate.length > 0) {
-          const { data } = await supabase.from('matches').insert(matchesToCreate).select();
+          const { data, error } = await supabase.from('matches').insert(matchesToCreate).select();
           if (data) setMatches(prev => [...prev, ...data]);
+          if (error) console.error("Error en autoMatchmaker:", error);
         }
       }
     }
@@ -142,7 +153,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded) autoMatchmaker(); 
   }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESAMIENTO ESTADÍSTICAS (Mantenido lo nuevo) ---
+  // --- PROCESAMIENTO ESTADÍSTICAS ---
   const processedTeams = useMemo(() => {
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -184,9 +195,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         return {
           ...player,
           stats: { 
-            ...player.stats, 
-            goals, 
-            assists, 
+            ...player.stats, goals, assists, 
             cleanSheets: (player.position === 'Goalkeeper' || player.position === 'Defender') ? cleanSheets : 0,
             cards: { yellow: yellows, red: reds } 
           },
@@ -198,7 +207,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
-  // --- RESTO DE FUNCIONES (Once Ideal, Eventos, Reset) ---
   const getBestEleven = useCallback((type: string, value?: number): TeamOfTheWeekPlayer[] => {
     let filteredMatchIds: string[] = [];
     if (type === 'week' && value) {
