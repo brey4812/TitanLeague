@@ -54,16 +54,17 @@ export interface MatchEvent {
   id: number;
   match_id: number | string;
   player_id: number | string;
-  // Soporte para ambos formatos (Frontend y Supabase) para evitar errores
+  // PROPIEDAD CRÍTICA: Permite identificar si el evento es local o visitante para la alineación
+  team_id: number | string; 
+  // Soporte dual para evitar errores entre el estado de React (camelCase) y Supabase (snake_case)
   playerName?: string;
   player_name?: string; 
   assistName?: string; 
   assist_name?: string;
-  // Campos para sustituciones
+  // Campos para sustituciones y tarjetas
   playerOutName?: string;
   player_out_name?: string;
-  team_id?: number | string;
-  type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST' | 'SUBSTITUTION'; // Añadido SUB
+  type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST' | 'SUBSTITUTION';
   minute: number;
   session_id?: string; 
 }
@@ -116,6 +117,8 @@ export interface LeagueContextType {
   getMatchEvents: (matchId: string | number) => MatchEvent[];
   getTeamOfTheWeek: (week: number) => TeamOfTheWeekPlayer[];
   getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
+  // Propiedad añadida para controlar el bloqueo de navegación en jornadas
+  lastPlayedWeek: number; 
   
   // --- FUNCIONES PARA COPAS Y PREMIOS ---
   getLeagueQualifiers: (divisionId: number) => { titanPeak: Team[], colossusShield: Team[] };
