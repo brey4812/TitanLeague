@@ -64,7 +64,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- NAVEGACIÓN SEGURA ---
   const lastPlayedWeek = useMemo(() => {
     const playedMatches = matches.filter(m => m.played);
     if (playedMatches.length === 0) return 1;
@@ -72,7 +71,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return isNaN(max) ? 1 : max;
   }, [matches]);
 
-  // --- GENERADOR DE PARTIDOS CON REINTENTOS (Arreglado el error de tipo y emparejamiento) ---
+  // --- GENERADOR DE CALENDARIO ADAPTABLE (ALGORITMO DE BERGER) ---
   const autoMatchmaker = useCallback(async () => {
     if (teams.length < 2 || !isLoaded || !sessionId) return;
 
@@ -80,78 +79,75 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
-      const maxRounds = (divTeams.length - 1) * 2;
+      // 1. Preparar lista de equipos (añadir Ghost si es impar)
+      let scheduleTeams = [...divTeams].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      const isOdd = scheduleTeams.length % 2 !== 0;
+      if (isOdd) {
+        scheduleTeams.push({ id: "ghost", name: "Descanso" } as any);
+      }
+
+      const n = scheduleTeams.length;
+      const roundsPerVuelta = n - 1;
+      const totalRounds = roundsPerVuelta * 2;
+      
       const divMatches = matches.filter(m => Number(m.division_id) === div.id);
       const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round))) : 0;
-      
       const isRoundFinished = divMatches.length > 0 && 
                               divMatches.filter(m => Number(m.round) === lastRound && !m.played).length === 0;
 
       const targetWeek = (divMatches.length === 0) ? 1 : (isRoundFinished ? lastRound + 1 : lastRound);
 
-      if (targetWeek > maxRounds) continue;
+      if (targetWeek > totalRounds) continue;
       if (divMatches.some(m => Number(m.round) === targetWeek)) continue;
 
-      const busyIds = new Set(
-        divMatches
-          .filter(m => Number(m.round) === targetWeek)
-          .flatMap(m => [String(m.home_team), String(m.away_team)])
-      );
+      // 2. Lógica de Rotación Berger
+      const isSecondVuelta = targetWeek > roundsPerVuelta;
+      const effectiveRound = isSecondVuelta ? targetWeek - roundsPerVuelta : targetWeek;
 
-      const available = divTeams.filter(t => !busyIds.has(String(t.id)));
+      const fixedTeam = scheduleTeams[0];
+      const rotatingTeams = scheduleTeams.slice(1);
+      
+      // Rotar según la jornada
+      const rotationIndex = effectiveRound - 1;
+      for (let i = 0; i < rotationIndex; i++) {
+        rotatingTeams.unshift(rotatingTeams.pop()!);
+      }
 
-      if (available.length >= 2) {
-        // CORRECCIÓN DE TIPO: Definimos el array como any[] para evitar errores de tipo 'never'
-        let matchesToCreate: any[] = []; 
-        let attempts = 0;
-        const maxAttempts = 15; 
+      const currentRoundOrder = [fixedTeam, ...rotatingTeams];
+      const matchesToCreate: any[] = [];
 
-        // Solo aceptamos si logramos emparejar a todos los equipos libres (2 partidos para 4 equipos)
-        while (matchesToCreate.length < Math.floor(available.length / 2) && attempts < maxAttempts) {
-          const shuffled = [...available].sort(() => Math.random() - 0.5);
-          const tempBatch: any[] = [];
-          
-          for (let i = 0; i < shuffled.length - 1; i += 2) {
-            const tA = shuffled[i];
-            const tB = shuffled[i+1];
+      for (let i = 0; i < n / 2; i++) {
+        const teamA = currentRoundOrder[i];
+        const teamB = currentRoundOrder[n - 1 - i];
 
-            const timesPlayed = divMatches.filter(m => 
-              (String(m.home_team) === String(tA.id) && String(m.away_team) === String(tB.id)) ||
-              (String(m.home_team) === String(tB.id) && String(m.away_team) === String(tA.id))
-            ).length;
+        // Omitir si uno es el equipo de descanso
+        if (teamA.id === "ghost" || teamB.id === "ghost") continue;
 
-            // Verificamos el límite de Ida y Vuelta
-            if (timesPlayed < 2) {
-              tempBatch.push({
-                home_team: tA.id, 
-                away_team: tB.id, 
-                round: targetWeek, 
-                played: false, 
-                division_id: div.id, 
-                competition: "League", 
-                session_id: sessionId 
-              });
-            }
-          }
-          
-          if (tempBatch.length >= Math.floor(available.length / 2)) {
-            matchesToCreate = tempBatch;
-          }
-          attempts++;
-        }
+        // Alternar localía e invertirla en la segunda vuelta
+        const shouldInvert = (i % 2 === 0 && !isSecondVuelta) || (i % 2 !== 0 && isSecondVuelta);
+        const home = shouldInvert ? teamB : teamA;
+        const away = shouldInvert ? teamA : teamB;
 
-        if (matchesToCreate.length > 0) {
-          const { data, error } = await supabase.from('matches').insert(matchesToCreate).select();
-          if (data) setMatches(prev => [...prev, ...data]);
-          if (error) console.error("Error en autoMatchmaker:", error);
-        }
+        matchesToCreate.push({
+          home_team: home.id, 
+          away_team: away.id, 
+          round: targetWeek, 
+          played: false, 
+          division_id: div.id, 
+          competition: "League", 
+          session_id: sessionId 
+        });
+      }
+
+      if (matchesToCreate.length > 0) {
+        const { data, error } = await supabase.from('matches').insert(matchesToCreate).select();
+        if (data) setMatches(prev => [...prev, ...data]);
+        if (error) console.error("Error Berger Algorithm:", error);
       }
     }
   }, [teams, matches, divisions, isLoaded, sessionId]);
 
-  useEffect(() => { 
-    if (isLoaded) autoMatchmaker(); 
-  }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
+  useEffect(() => { if (isLoaded) autoMatchmaker(); }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
   // --- PROCESAMIENTO ESTADÍSTICAS ---
   const processedTeams = useMemo(() => {
@@ -173,71 +169,27 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       });
 
       const updatedRoster = (team.roster || []).map(player => {
-        const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
-        const goals = playerEvents.filter(e => e.type === 'GOAL').length;
-        const assists = matchEvents.filter(e => 
-          (String((e as any).assist_name) === player.name) || 
-          (e.type === 'ASSIST' && String(e.player_id) === String(player.id))
-        ).length;
+        const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
+        const goals = pEvents.filter(e => e.type === 'GOAL').length;
+        const assists = matchEvents.filter(e => (String((e as any).assist_name) === player.name) || (e.type === 'ASSIST' && String(e.player_id) === String(player.id))).length;
+        const cleanSheets = teamMatches.filter(m => (String(m.home_team) === String(team.id) ? Number(m.away_goals) : Number(m.home_goals)) === 0).length;
 
-        const yellows = playerEvents.filter(e => e.type === 'YELLOW_CARD').length;
-        const reds = playerEvents.filter(e => e.type === 'RED_CARD').length;
-
-        const cleanSheets = teamMatches.filter(m => {
-          const isHome = String(m.home_team) === String(team.id);
-          const goalsAgainst = isHome ? Number(m.away_goals) : Number(m.home_goals);
-          return goalsAgainst === 0;
-        }).length;
-
-        let rating = 6.0 + (goals * 1.5) + (assists * 0.8) - (yellows * 0.5) - (reds * 4.0);
+        let rating = 6.0 + (goals * 1.5) + (assists * 0.8) - (pEvents.filter(e => e.type === 'YELLOW_CARD').length * 0.5) - (pEvents.filter(e => e.type === 'RED_CARD').length * 4.0);
         if (player.position === 'Goalkeeper' || player.position === 'Defender') rating += (cleanSheets * 1.0);
 
         return {
           ...player,
-          stats: { 
-            ...player.stats, goals, assists, 
-            cleanSheets: (player.position === 'Goalkeeper' || player.position === 'Defender') ? cleanSheets : 0,
-            cards: { yellow: yellows, red: reds } 
-          },
+          stats: { ...player.stats, goals, assists, cleanSheets: (player.position === 'Goalkeeper' || player.position === 'Defender') ? cleanSheets : 0, cards: { yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length, red: pEvents.filter(e => e.type === 'RED_CARD').length } },
           rating: Number(rating.toFixed(2))
         };
       });
-
       return { ...team, stats, points: stats.points, roster: updatedRoster };
     });
   }, [teams, matches, matchEvents]);
 
-  const getBestEleven = useCallback((type: string, value?: number): TeamOfTheWeekPlayer[] => {
-    let filteredMatchIds: string[] = [];
-    if (type === 'week' && value) {
-      filteredMatchIds = matches.filter(m => Number(m.round) === value && m.played).map(m => String(m.id));
-    } else {
-      filteredMatchIds = matches.filter(m => m.played).map(m => String(m.id));
-    }
-    const teamIdsInPeriod = matches.filter(m => filteredMatchIds.includes(String(m.id))).flatMap(m => [String(m.home_team), String(m.away_team)]);
-    const candidates = processedTeams
-      .filter(t => teamIdsInPeriod.includes(String(t.id)))
-      .flatMap(t => (t.roster || []).map(p => ({ ...p, teamName: t.name, teamLogoUrl: t.badge_url, teamDataAiHint: t.real_team_name })))
-      .filter(p => p.stats.cards.red === 0);
-    const getTopByPos = (pos: string, limit: number) => candidates.filter(p => p.position === pos).sort((a, b) => b.rating - a.rating).slice(0, limit);
-    let squad = [...getTopByPos('Goalkeeper', 1), ...getTopByPos('Defender', 4), ...getTopByPos('Midfielder', 3), ...getTopByPos('Forward', 3)];
-    if (squad.length < 11) {
-      const currentIds = new Set(squad.map(p => String(p.id)));
-      squad = [...squad, ...candidates.filter(p => !currentIds.has(String(p.id))).sort((a, b) => b.rating - a.rating).slice(0, 11 - squad.length)];
-    }
-    return squad as TeamOfTheWeekPlayer[];
-  }, [processedTeams, matches]);
-
+  // --- RESTO DE FUNCIONES ---
   const getMatchEvents = useCallback((matchId: string | number) => {
-    return matchEvents
-      .filter(e => String(e.match_id) === String(matchId))
-      .map(e => ({
-        ...e,
-        playerName: (e as any).player_name || e.playerName,
-        assistName: (e as any).assist_name || e.assistName,
-        team_id: e.team_id 
-      }))
-      .sort((a, b) => a.minute - b.minute);
+    return matchEvents.filter(e => String(e.match_id) === String(matchId)).map(e => ({ ...e, playerName: (e as any).player_name || e.playerName, assistName: (e as any).assist_name || e.assistName, team_id: e.team_id })).sort((a, b) => a.minute - b.minute);
   }, [matchEvents]);
 
   const resetLeagueData = useCallback(async () => {
@@ -245,41 +197,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       await supabase.from('match_events').delete().eq('session_id', sessionId);
       await supabase.from('matches').delete().eq('session_id', sessionId);
       localStorage.removeItem('league_active_teams');
-      setTeams([]);
-      setMatches([]);
-      setMatchEvents([]);
       window.location.reload();
     }
   }, [sessionId]);
 
   return (
     <LeagueContext.Provider value={{
-      teams: processedTeams,
-      divisions,
-      matches,
-      matchEvents,
-      players: processedTeams.flatMap(t => t.roster || []),
-      isLoaded,
-      sessionId,
-      lastPlayedWeek,
-      addTeam: (t) => setTeams(prev => [...prev, t]),
-      deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))),
-      updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)),
-      addPlayerToTeam: (tid, p) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: [...t.roster, p]} : t)),
-      removePlayerFromTeam: (tid, pid) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: t.roster.filter(p => String(p.id) !== String(pid))} : t)),
-      getTeamById: (id) => processedTeams.find(t => String(t.id) === String(id)),
-      getPlayerById: (id) => processedTeams.flatMap(t => t.roster).find(p => String(p.id) === String(id)),
-      getTeamByPlayerId: (pid) => processedTeams.find(t => t.roster.some(p => String(p.id) === String(pid))),
-      simulateMatchday: () => {}, 
-      getMatchEvents,
-      getTeamOfTheWeek: (w) => getBestEleven('week', w),
-      getBestEleven,
-      getLeagueQualifiers: (id) => ({ titanPeak: [], colossusShield: [] }),
-      getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
-      drawTournament: (name) => Promise.resolve(), 
-      resetLeagueData,
-      importLeagueData: (d: any) => true,
-      refreshData
+      teams: processedTeams, divisions, matches, matchEvents, players: processedTeams.flatMap(t => t.roster || []), isLoaded, sessionId, lastPlayedWeek,
+      addTeam: (t) => setTeams(prev => [...prev, t]), deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))), updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)), addPlayerToTeam: (tid, p) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: [...t.roster, p]} : t)), removePlayerFromTeam: (tid, pid) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: t.roster.filter(p => String(p.id) !== String(pid))} : t)), getTeamById: (id) => processedTeams.find(t => String(t.id) === String(id)), getPlayerById: (id) => processedTeams.flatMap(t => t.roster).find(p => String(p.id) === String(id)), getTeamByPlayerId: (pid) => processedTeams.find(t => t.roster.some(p => String(p.id) === String(pid))), simulateMatchday: () => {}, getMatchEvents, getTeamOfTheWeek: (w) => [], getBestEleven: (t, v) => [], getLeagueQualifiers: (id) => ({ titanPeak: [], colossusShield: [] }), getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }), drawTournament: (name) => Promise.resolve(), resetLeagueData, importLeagueData: (d: any) => true, refreshData
     }}>
       {children}
     </LeagueContext.Provider>
