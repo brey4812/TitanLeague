@@ -54,14 +54,11 @@ export interface MatchEvent {
   id: number;
   match_id: number | string;
   player_id: number | string;
-  // PROPIEDAD CRÍTICA: Permite identificar si el evento es local o visitante para la alineación
   team_id: number | string; 
-  // Soporte dual para evitar errores entre el estado de React (camelCase) y Supabase (snake_case)
   playerName?: string;
   player_name?: string; 
   assistName?: string; 
   assist_name?: string;
-  // Campos para sustituciones y tarjetas
   playerOutName?: string;
   player_out_name?: string;
   type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST' | 'SUBSTITUTION';
@@ -71,7 +68,7 @@ export interface MatchEvent {
 
 export interface MatchResult {
   id: number | string;
-  season?: number;
+  season?: number; // Propiedad necesaria para el sistema de temporadas
   week: number;
   home_team: number | string;
   away_team: number | string;
@@ -105,6 +102,11 @@ export interface LeagueContextType {
   players: Player[];
   isLoaded: boolean;
   sessionId: string; 
+  
+  // PROPIEDADES DE TEMPORADA
+  season: number; 
+  nextSeason: () => void;
+
   addTeam: (team: Team) => void;
   deleteTeam: (id: number | string) => void;
   updateTeam: (team: Team) => void;
@@ -116,11 +118,12 @@ export interface LeagueContextType {
   simulateMatchday: () => void;
   getMatchEvents: (matchId: string | number) => MatchEvent[];
   getTeamOfTheWeek: (week: number) => TeamOfTheWeekPlayer[];
+  
+  // MODIFICADO: Soporte para 'week', 'month', 'season'
   getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
-  // Propiedad añadida para controlar el bloqueo de navegación en jornadas
+  
   lastPlayedWeek: number; 
   
-  // --- FUNCIONES PARA COPAS Y PREMIOS ---
   getLeagueQualifiers: (divisionId: number) => { titanPeak: Team[], colossusShield: Team[] };
   getSeasonAwards: () => { pichichi: Player | undefined, assistMaster: Player | undefined, bestGoalkeeper: Player | undefined };
   drawTournament: (competitionName: "The Titan Peak" | "Colossus Shield") => Promise<void>;
