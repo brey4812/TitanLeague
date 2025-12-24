@@ -72,7 +72,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return isNaN(max) ? 1 : max;
   }, [matches]);
 
-  // --- GENERADOR DE PARTIDOS POR LOTES (CORRECCIÓN CRÍTICA) ---
+  // --- GENERADOR DE PARTIDOS ROUND ROBIN (IDA Y VUELTA) ---
   const autoMatchmaker = useCallback(async () => {
     if (teams.length < 2 || !isLoaded || !sessionId) return;
 
@@ -80,6 +80,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
+      const maxRounds = (divTeams.length - 1) * 2;
       const divMatches = matches.filter(m => Number(m.division_id) === div.id);
       const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round))) : 0;
       
@@ -88,39 +89,50 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const targetWeek = (divMatches.length === 0) ? 1 : (isRoundFinished ? lastRound + 1 : lastRound);
 
-      // 1. Identificamos a TODOS los equipos que ya tienen partido en esta jornada específica
+      if (targetWeek > maxRounds) continue;
+      if (divMatches.some(m => Number(m.round) === targetWeek)) continue;
+
       const busyIds = new Set(
         divMatches
           .filter(m => Number(m.round) === targetWeek)
           .flatMap(m => [String(m.home_team), String(m.away_team)])
       );
 
-      // 2. Filtramos TODOS los equipos disponibles de la división que están libres
       const available = divTeams.filter(t => !busyIds.has(String(t.id)));
 
-      // 3. Emparejamos a todos los disponibles en un solo array antes de insertar
       if (available.length >= 2) {
         const shuffled = [...available].sort(() => Math.random() - 0.5);
         const matchesToCreate = [];
         
         for (let i = 0; i < shuffled.length - 1; i += 2) {
-          matchesToCreate.push({
-            home_team: shuffled[i].id, 
-            away_team: shuffled[i+1].id, 
-            round: targetWeek, 
-            played: false, 
-            division_id: div.id, 
-            competition: "League", 
-            session_id: sessionId 
-          });
+          const teamA = shuffled[i];
+          const teamB = shuffled[i+1];
+
+          const timesPlayed = divMatches.filter(m => 
+            (String(m.home_team) === String(teamA.id) && String(m.away_team) === String(teamB.id)) ||
+            (String(m.home_team) === String(teamB.id) && String(m.away_team) === String(teamA.id))
+          ).length;
+
+          const firstVueltaLimit = divTeams.length - 1;
+          const isValidEncounter = (targetWeek <= firstVueltaLimit && timesPlayed === 0) || 
+                                  (targetWeek > firstVueltaLimit && timesPlayed === 1);
+
+          if (isValidEncounter) {
+            matchesToCreate.push({
+              home_team: teamA.id, 
+              away_team: teamB.id, 
+              round: targetWeek, 
+              played: false, 
+              division_id: div.id, 
+              competition: "League", 
+              session_id: sessionId 
+            });
+          }
         }
 
-        // 4. Inserción masiva para evitar que el loop se repita fragmentado
         if (matchesToCreate.length > 0) {
-          const { data, error } = await supabase.from('matches').insert(matchesToCreate).select();
-          if (data) {
-            setMatches(prev => [...prev, ...data]);
-          }
+          const { data } = await supabase.from('matches').insert(matchesToCreate).select();
+          if (data) setMatches(prev => [...prev, ...data]);
         }
       }
     }
@@ -151,26 +163,39 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const updatedRoster = (team.roster || []).map(player => {
         const playerEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
+        
+        // GOLES: Basado en evento GOAL
         const goals = playerEvents.filter(e => e.type === 'GOAL').length;
+        
+        // ASISTENCIAS: Basado en assist_name o eventos de asistencia
         const assists = matchEvents.filter(e => 
-          (e.type === 'ASSIST' && String(e.player_id) === String(player.id)) || 
-          (String((e as any).assist_name) === player.name)
+          (String((e as any).assist_name) === player.name) || 
+          (e.type === 'ASSIST' && String(e.player_id) === String(player.id))
         ).length;
 
         const yellows = playerEvents.filter(e => e.type === 'YELLOW_CARD').length;
         const reds = playerEvents.filter(e => e.type === 'RED_CARD').length;
 
+        // VALLAS INVICTAS: Si el rival marcó 0 goles
         const cleanSheets = teamMatches.filter(m => {
           const isHome = String(m.home_team) === String(team.id);
-          return (isHome ? Number(m.away_goals) : Number(m.home_goals)) === 0;
+          const goalsAgainst = isHome ? Number(m.away_goals) : Number(m.home_goals);
+          return goalsAgainst === 0;
         }).length;
 
+        // Rating dinámico
         let rating = 6.0 + (goals * 1.5) + (assists * 0.8) - (yellows * 0.5) - (reds * 4.0);
         if (player.position === 'Goalkeeper' || player.position === 'Defender') rating += (cleanSheets * 1.0);
 
         return {
           ...player,
-          stats: { ...player.stats, goals, assists, cleanSheets, cards: { yellow: yellows, red: reds } },
+          stats: { 
+            ...player.stats, 
+            goals, 
+            assists, 
+            cleanSheets: (player.position === 'Goalkeeper' || player.position === 'Defender') ? cleanSheets : 0,
+            cards: { yellow: yellows, red: reds } 
+          },
           rating: Number(rating.toFixed(2))
         };
       });
@@ -179,6 +204,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents]);
 
+  // --- RESTO DE FUNCIONES ---
   const getBestEleven = useCallback((type: string, value?: number): TeamOfTheWeekPlayer[] => {
     let filteredMatchIds: string[] = [];
     if (type === 'week' && value) {
