@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Usamos el SERVICE_ROLE_KEY para asegurar permisos de escritura
+// Usamos el SERVICE_ROLE_KEY para asegurar permisos de escritura en la DB
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY! 
@@ -20,13 +20,14 @@ interface TeamData {
 
 export async function POST(req: Request) {
   try {
-    const { divisionId, week, sessionId } = await req.json();
+    const body = await req.json();
+    const { divisionId, week, sessionId } = body;
 
     if (!divisionId || !week || !sessionId) {
       return NextResponse.json({ ok: false, error: "Faltan parámetros" }, { status: 400 });
     }
 
-    // 1. Obtener partidos de la jornada específica
+    // 1. Obtener partidos pendientes
     const { data: matches, error: matchError } = await supabase
       .from("matches")
       .select("*")
@@ -38,10 +39,10 @@ export async function POST(req: Request) {
     if (matchError) throw matchError;
 
     if (!matches || matches.length === 0) {
-      return NextResponse.json({ ok: true, message: "No hay partidos pendientes" });
+      return NextResponse.json({ ok: true, message: "No hay partidos para simular" });
     }
 
-    // 2. Cargar jugadores de los equipos involucrados
+    // 2. Obtener jugadores de los equipos involucrados
     const teamIds = matches.flatMap(m => [m.home_team, m.away_team]);
     const { data: allPlayers, error: playerError } = await supabase
       .from("players")
@@ -52,8 +53,6 @@ export async function POST(req: Request) {
 
     for (const match of matches) {
       const matchEvents: any[] = [];
-      
-      // Filtrado robusto de alineaciones
       const rosters: TeamData = {
         home: allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [],
         away: allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || []
@@ -63,10 +62,6 @@ export async function POST(req: Request) {
         home: rosters.home.slice(0, 11),
         away: rosters.away.slice(0, 11)
       };
-      const bench: TeamData = {
-        home: rosters.home.slice(11, 16),
-        away: rosters.away.slice(11, 16)
-      };
 
       const expelledIds = new Set<string>();
       const yellowCardsCount: Record<string, number> = {};
@@ -75,33 +70,6 @@ export async function POST(req: Request) {
 
       // --- SIMULACIÓN LÓGICA DE 90 MINUTOS ---
       for (let minute = 1; minute <= 90; minute++) {
-        
-        // Sustituciones estratégicas
-        if (minute >= 60 && minute % 10 === 0) {
-          (["home", "away"] as const).forEach(side => {
-            if (bench[side].length > 0 && Math.random() < 0.3) {
-              const playerIn = bench[side].shift();
-              const indexOut = activePlayers[side].findIndex(p => !expelledIds.has(String(p.id)));
-              
-              if (playerIn && indexOut !== -1) {
-                const playerOut = activePlayers[side][indexOut];
-                activePlayers[side][indexOut] = playerIn;
-
-                matchEvents.push({
-                  match_id: match.id,
-                  team_id: side === "home" ? match.home_team : match.away_team,
-                  type: "SUBSTITUTION",
-                  minute,
-                  player_id: playerIn.id,
-                  player_name: playerIn.name,
-                  player_out_name: playerOut.name,
-                  session_id: sessionId
-                });
-              }
-            }
-          });
-        }
-
         (["home", "away"] as const).forEach(side => {
           const teamId = side === "home" ? match.home_team : match.away_team;
           const available = activePlayers[side].filter(p => !expelledIds.has(String(p.id)));
@@ -109,7 +77,7 @@ export async function POST(req: Request) {
           if (available.length === 0) return;
 
           // Evento de Gol
-          if (Math.random() < 0.007) { // Probabilidad ligeramente ajustada
+          if (Math.random() < 0.007) {
             const scorer = available[Math.floor(Math.random() * available.length)];
             const assistant = available.length > 1 && Math.random() < 0.7
                 ? available.find(p => p.id !== scorer.id)
@@ -123,13 +91,14 @@ export async function POST(req: Request) {
               type: "GOAL",
               minute,
               player_id: scorer.id,
-              player_name: scorer.name, // Coincide con tabla match_events
-              assist_name: assistant?.name || null, // Coincide con tabla match_events
+              // Sincronización con nombres de columna de la DB
+              player_name: scorer.name,
+              assist_name: assistant?.name || null,
               session_id: sessionId
             });
           }
 
-          // Evento de Disciplina
+          // Evento de Tarjetas
           if (Math.random() < 0.005) {
             const target = available[Math.floor(Math.random() * available.length)];
             const pId = String(target.id);
@@ -151,7 +120,7 @@ export async function POST(req: Request) {
         });
       }
 
-      // 3. Persistencia de Resultados
+      // 3. Actualizar el partido en Supabase
       await supabase
         .from("matches")
         .update({
@@ -161,13 +130,13 @@ export async function POST(req: Request) {
         })
         .eq("id", match.id);
 
-      // 4. Inserción masiva de eventos
+      // 4. Insertar eventos generados
       if (matchEvents.length > 0) {
         await supabase.from("match_events").insert(matchEvents);
       }
     }
 
-    return NextResponse.json({ ok: true, message: "Simulación de jornada exitosa" });
+    return NextResponse.json({ ok: true, message: "Simulación completada con éxito" });
   } catch (err: any) {
     console.error("SIM ERROR:", err);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });

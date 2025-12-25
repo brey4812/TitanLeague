@@ -1,5 +1,6 @@
 /**
  * src/lib/types.ts
+ * Sincronización completa con Supabase DB y UI
  */
 
 /* ===================== PLAYER ===================== */
@@ -10,7 +11,6 @@ export interface Player {
   position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward';
   country?: string;
   face_url?: string;
-
   team_id?: number | string;
 
   /** ⭐ MEDIA ACTUAL (calculada) */
@@ -47,19 +47,15 @@ export interface Team {
   id: number | string;
   name: string;
   country: string;
-
   logo?: string;
   badge_url?: string;
-
   real_team_name?: string;
   league?: string;
   external_id?: string;
-
   overall: number;
   attack: number;
   midfield: number;
   defense: number;
-
   division_id: number;
   divisionName?: string;
 
@@ -72,7 +68,6 @@ export interface Team {
   };
 
   roster: Player[];
-
   points?: number;
 }
 
@@ -99,10 +94,18 @@ export interface MatchEvent {
     | 'SUBSTITUTION';
 
   minute: number;
-
   session_id?: string;
 
-  /** Extras opcionales (UI) */
+  /** * ⚡ CAMPOS DE BASE DE DATOS (Snake Case)
+   * Necesarios para recibir datos de Supabase sin errores
+   */
+  player_name?: string;
+  assist_name?: string;
+  player_out_name?: string;
+
+  /** * ⚡ CAMPOS DE UI (Camel Case)
+   * Usados en tus componentes de React
+   */
   playerName?: string;
   assistName?: string;
   playerOutName?: string;
@@ -113,6 +116,9 @@ export interface MatchEvent {
 export interface MatchResult {
   id: number | string;
 
+  /** ⚡ REQUERIDO: season_id para coincidir con la tabla 'matches' */
+  season_id?: number | string;
+  
   season?: number;
   round?: number;
   week?: number;
@@ -130,7 +136,6 @@ export interface MatchResult {
   session_id?: string;
 
   mvpId?: number | string;
-
   events?: MatchEvent[];
 }
 
