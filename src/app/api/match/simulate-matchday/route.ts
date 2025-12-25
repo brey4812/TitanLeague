@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Usamos el SERVICE_ROLE_KEY para saltar políticas RLS si es necesario en la simulación
+// Usamos el SERVICE_ROLE_KEY para asegurar permisos de escritura
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY! 
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Faltan parámetros" }, { status: 400 });
     }
 
-    // 1. Obtener partidos pendientes
+    // 1. Obtener partidos de la jornada específica
     const { data: matches, error: matchError } = await supabase
       .from("matches")
       .select("*")
@@ -38,10 +38,10 @@ export async function POST(req: Request) {
     if (matchError) throw matchError;
 
     if (!matches || matches.length === 0) {
-      return NextResponse.json({ ok: true, message: "No hay partidos para simular" });
+      return NextResponse.json({ ok: true, message: "No hay partidos pendientes" });
     }
 
-    // 2. Obtener jugadores de los equipos involucrados
+    // 2. Cargar jugadores de los equipos involucrados
     const teamIds = matches.flatMap(m => [m.home_team, m.away_team]);
     const { data: allPlayers, error: playerError } = await supabase
       .from("players")
@@ -52,12 +52,13 @@ export async function POST(req: Request) {
 
     for (const match of matches) {
       const matchEvents: any[] = [];
+      
+      // Filtrado robusto de alineaciones
       const rosters: TeamData = {
         home: allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [],
         away: allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || []
       };
 
-      // Jugadores activos (11 iniciales) y banca
       const activePlayers: TeamData = {
         home: rosters.home.slice(0, 11),
         away: rosters.away.slice(0, 11)
@@ -72,10 +73,10 @@ export async function POST(req: Request) {
       let homeScore = 0;
       let awayScore = 0;
 
-      // --- SIMULACIÓN MINUTO A MINUTO ---
+      // --- SIMULACIÓN LÓGICA DE 90 MINUTOS ---
       for (let minute = 1; minute <= 90; minute++) {
         
-        // 🔁 Sustituciones (A partir del min 60)
+        // Sustituciones estratégicas
         if (minute >= 60 && minute % 10 === 0) {
           (["home", "away"] as const).forEach(side => {
             if (bench[side].length > 0 && Math.random() < 0.3) {
@@ -92,7 +93,7 @@ export async function POST(req: Request) {
                   type: "SUBSTITUTION",
                   minute,
                   player_id: playerIn.id,
-                  player_name: playerIn.name,       // Guardamos el nombre para facilitar la UI
+                  player_name: playerIn.name,
                   player_out_name: playerOut.name,
                   session_id: sessionId
                 });
@@ -107,8 +108,8 @@ export async function POST(req: Request) {
 
           if (available.length === 0) return;
 
-          // ⚽ PROBABILIDAD DE GOL
-          if (Math.random() < 0.006) {
+          // Evento de Gol
+          if (Math.random() < 0.007) { // Probabilidad ligeramente ajustada
             const scorer = available[Math.floor(Math.random() * available.length)];
             const assistant = available.length > 1 && Math.random() < 0.7
                 ? available.find(p => p.id !== scorer.id)
@@ -122,14 +123,14 @@ export async function POST(req: Request) {
               type: "GOAL",
               minute,
               player_id: scorer.id,
-              player_name: scorer.name,
-              assist_name: assistant?.name || null,
+              player_name: scorer.name, // Coincide con tabla match_events
+              assist_name: assistant?.name || null, // Coincide con tabla match_events
               session_id: sessionId
             });
           }
 
-          // 🟨🟥 PROBABILIDAD DE TARJETAS
-          if (Math.random() < 0.004) {
+          // Evento de Disciplina
+          if (Math.random() < 0.005) {
             const target = available[Math.floor(Math.random() * available.length)];
             const pId = String(target.id);
             yellowCardsCount[pId] = (yellowCardsCount[pId] || 0) + 1;
@@ -150,7 +151,7 @@ export async function POST(req: Request) {
         });
       }
 
-      // 3. Actualizar el resultado del partido
+      // 3. Persistencia de Resultados
       await supabase
         .from("matches")
         .update({
@@ -160,13 +161,13 @@ export async function POST(req: Request) {
         })
         .eq("id", match.id);
 
-      // 4. Insertar todos los eventos generados
+      // 4. Inserción masiva de eventos
       if (matchEvents.length > 0) {
         await supabase.from("match_events").insert(matchEvents);
       }
     }
 
-    return NextResponse.json({ ok: true, message: "Jornada simulada con éxito" });
+    return NextResponse.json({ ok: true, message: "Simulación de jornada exitosa" });
   } catch (err: any) {
     console.error("SIM ERROR:", err);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });

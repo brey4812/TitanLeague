@@ -46,7 +46,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
         supabase.from('matches').select('*').eq('session_id', sessionId).order('round', { ascending: true }),
         supabase.from('match_events').select('*').eq('session_id', sessionId),
-        // CORRECCIÓN: Nombre exacto de columna 'season_number' según la base de datos
+        // CORRECCIÓN: Nombre de columna 'season_number' según DB
         supabase.from('seasons').select('season_number').eq('is_active', true).maybeSingle()
       ]);
 
@@ -62,7 +62,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
-  // Persistir equipos locales cuando cambien
   useEffect(() => {
     if (isLoaded && teams.length > 0) {
       localStorage.setItem('league_active_teams', JSON.stringify(teams));
@@ -128,7 +127,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   // --- PROCESADO ESTADÍSTICAS + INTEGRACIÓN RATINGS ---
   const processedTeams = useMemo(() => {
-    // GUARDIA: Evita el error de hidratación #310
+    // GUARDIA: Evita error #310
     if (!isLoaded || teams.length === 0) return [];
 
     return teams.map(team => {
@@ -165,7 +164,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           stats: {
             ...player.stats,
             goals: pEvents.filter(e => e.type === 'GOAL').length,
-            // NORMALIZACIÓN: Reconocer asistencias por ID o por assist_name de la DB
+            // NORMALIZACIÓN: Soporte para 'assist_name' de la DB
             assists: matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name)).length,
             cards: {
               yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
@@ -208,9 +207,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     },
     getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({
       ...e,
-      // NORMALIZACIÓN: Mapear nombres de base de datos a camelCase para TypeScript
+      // NORMALIZACIÓN: Mapear nombres de DB a camelCase de TypeScript
       playerName: (e as any).player_name || e.playerName,
-      assistName: (e as any).assist_name || e.assistName
+      assistName: (e as any).assist_name || e.assistName,
+      playerOutName: (e as any).player_out_name || e.playerOutName
     })),
     getTeamOfTheWeek: (w) => {
         const weekMatchIds = matches.filter(m => Number(m.round) === w && m.played).map(m => String(m.id));
@@ -228,7 +228,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
     drawTournament: async (n) => {}, 
     resetLeagueData: async () => { 
-        if(confirm("¿Reset?")) { 
+        if(confirm("¿Resetear?")) { 
             await supabase.from('matches').delete().eq('session_id', sessionId); 
             localStorage.clear(); 
             window.location.reload(); 
