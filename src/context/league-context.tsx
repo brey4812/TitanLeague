@@ -15,6 +15,8 @@ import {
   Division,
   LeagueContextType,
   MatchEvent,
+  Player,
+  TeamOfTheWeekPlayer,
 } from "@/lib/types";
 
 const supabase = createClient(
@@ -33,7 +35,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentSeason, setCurrentSeason] = useState(1);
 
-  /* ===================== SESSION ID (NO TOCAR) ===================== */
+  /* ===================== SESSION ID ===================== */
   const [sessionId] = useState(() => {
     if (typeof window !== "undefined") {
       let id = localStorage.getItem("league_session_id");
@@ -112,6 +114,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         return {
           ...p,
           rating: Number(rating.toFixed(1)),
+          matchRatings: [
+            ...(p.matchRatings || []),
+            {
+              season: currentSeason,
+              week: teamMatches.length,
+              rating: Number(rating.toFixed(1)),
+            },
+          ],
           stats: {
             goals,
             assists,
@@ -128,7 +138,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [teams, matches, matchEvents, currentSeason, isLoaded]);
 
-  /* ===================== SIMULACIÓN DE PARTIDO ===================== */
+  /* ===================== SIMULACIÓN ===================== */
   const simulateMatchday = useCallback(async () => {
     const round =
       Math.max(0, ...matches.map((m) => Number(m.round || 0))) + 1;
@@ -164,16 +174,16 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
     const events: MatchEvent[] = [];
     const ratings = new Map<string, number>();
-    const expelled = new Set<string>();
 
     const randomPlayer = (team: Team) =>
       team.roster[Math.floor(Math.random() * team.roster.length)];
 
     const addGoal = (team: Team) => {
       const scorer = randomPlayer(team);
-      if (expelled.has(String(scorer.id))) return;
-
-      ratings.set(String(scorer.id), (ratings.get(String(scorer.id)) || 6) + 1.5);
+      ratings.set(
+        String(scorer.id),
+        (ratings.get(String(scorer.id)) || 6) + 1.5
+      );
 
       events.push({
         match_id: match.id,
@@ -208,6 +218,35 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
     await refreshData();
   }, [processedTeams, matches, sessionId, currentSeason, refreshData]);
+
+  /* ===================== UTILIDADES ===================== */
+  const getTeamOfTheWeek = (week: number): TeamOfTheWeekPlayer[] => {
+    const players = processedTeams.flatMap((t) => t.roster || []);
+    return players
+      .filter((p) =>
+        p.matchRatings?.some(
+          (r) => r.week === week && r.season === currentSeason
+        )
+      )
+      .sort((a, b) => b.rating - a.rating)
+      .slice(0, 11)
+      .map((p) => {
+        const team = processedTeams.find((t) =>
+          t.roster.some((rp) => rp.id === p.id)
+        );
+        return {
+          ...p,
+          teamName: team?.name || "",
+          teamLogoUrl: team?.badge_url,
+          teamDataAiHint: "",
+        };
+      });
+  };
+
+  const getBestEleven = (): TeamOfTheWeekPlayer[] =>
+    getTeamOfTheWeek(
+      Math.max(1, ...matches.map((m) => Number(m.round || 1)))
+    );
 
   /* ===================== CONTEXT ===================== */
   const value: LeagueContextType = {
@@ -268,8 +307,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getMatchEvents: (id) =>
       matchEvents.filter((e) => String(e.match_id) === String(id)),
 
-    getTeamOfTheWeek: () => [],
-    getBestEleven: () => [],
+    getTeamOfTheWeek,
+    getBestEleven,
 
     lastPlayedWeek:
       Math.max(1, ...matches.map((m) => Number(m.round || 1))) || 1,

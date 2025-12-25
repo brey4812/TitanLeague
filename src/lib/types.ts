@@ -16,12 +16,18 @@ export interface Player {
   /** ⭐ MEDIA ACTUAL (calculada) */
   rating: number;
 
-  /** ⭐ HISTORIAL DE VALORACIONES */
+  /** ⭐ HISTORIAL DE VALORACIONES POR PARTIDO */
   matchRatings?: {
     season: number;
     week: number;
     rating: number; // 1–10
   }[];
+
+  /** 🟥🟨 DISCIPLINA / SANCIONES */
+  disciplinary?: {
+    yellowAccumulated: number;     // acumuladas en la temporada
+    suspendedUntilWeek?: number;   // semana hasta la que está sancionado
+  };
 
   stats: {
     goals: number;
