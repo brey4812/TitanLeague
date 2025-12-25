@@ -42,26 +42,24 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshData = useCallback(async () => {
     try {
-      const { data: dbTeams } = await supabase.from('teams').select('*, players(*)');
-      
-      if (dbTeams && dbTeams.length > 0) {
-        setTeams(dbTeams.map((t: any) => ({ ...t, roster: t.players || [] })));
-      } else {
-        const saved = localStorage.getItem('league_active_teams');
-        if (saved) setTeams(JSON.parse(saved));
+      // PRIORIDAD LOCAL: Restauramos tus equipos buscados para que no desaparezcan
+      const savedTeams = localStorage.getItem('league_active_teams');
+      if (savedTeams) {
+        setTeams(JSON.parse(savedTeams));
       }
-
+      
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
         supabase.from('matches').select('*').eq('session_id', sessionId).order('round', { ascending: true }),
         supabase.from('match_events').select('*').eq('session_id', sessionId),
+        // Sincronización exacta con season_number
         supabase.from('seasons').select('season_number').eq('is_active', true).maybeSingle()
       ]);
 
-      if (seasonRes.data) setCurrentSeason(Number(seasonRes.data.season_number));
+      if (seasonRes.data) setCurrentSeason(Number(seasonRes.data.season_number) || 1);
       if (matchesRes.data) setMatches(matchesRes.data);
       if (eventsRes.data) setMatchEvents(eventsRes.data);
     } catch (error) {
-      console.error("Error refreshData:", error);
+      console.error("Error refreshData Titán:", error);
     } finally {
       setIsLoaded(true);
     }
@@ -69,14 +67,17 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
-  // --- SIMULACIÓN AVANZADA (UNIFICADA CON API) ---
+  // Persistir equipos locales cuando cambien (para que se mantengan al recargar)
+  useEffect(() => {
+    if (isLoaded && teams.length > 0) {
+      localStorage.setItem('league_active_teams', JSON.stringify(teams));
+    }
+  }, [teams, isLoaded]);
+
   const simulateMatchday = useCallback(async () => {
     try {
-      // Obtenemos la semana actual no jugada de la primera división como referencia
-      const weekToSimulate = matches.find(m => !m.played && m.division_id === 1)?.round || 1;
-      
+      const weekToSimulate = matches.find(m => !m.played)?.round || 1;
       setIsLoaded(false);
-      // Simulamos para todas las divisiones
       await Promise.all(divisions.map(div => 
         fetch("/api/simulate", {
           method: "POST",
@@ -84,7 +85,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           body: JSON.stringify({ divisionId: div.id, week: weekToSimulate, sessionId }),
         })
       ));
-      
       await refreshData();
     } catch (error) {
       console.error("Simulación fallida:", error);
@@ -93,11 +93,11 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [sessionId, matches, refreshData, divisions]);
 
-  // --- MOTOR DE PARTIDOS BERGER (CALENDARIO) ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId) return;
 
     for (const div of divisions) {
+      // Filtrar equipos locales por su division_id asignado
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
@@ -109,7 +109,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const divMatches = matches.filter(m => Number(m.division_id) === div.id && (Number(m.season) || 1) === currentSeason);
       const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round || 0))) : 0;
       const isRoundFinished = divMatches.length > 0 && divMatches.every(m => m.round !== lastRound || m.played);
-
       const targetWeek = (divMatches.length === 0) ? 1 : (isRoundFinished ? lastRound + 1 : lastRound);
 
       if (targetWeek > roundsPerVuelta * 2 || divMatches.some(m => Number(m.round) === targetWeek)) continue;
@@ -149,34 +148,51 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(timer);
   }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESAMIENTO ESTADÍSTICAS ---
   const processedTeams = useMemo(() => {
+    // Blindaje contra Error #310
     if (!isLoaded || teams.length === 0) return [];
+
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
       const teamMatches = matches.filter(m => m.played && (Number(m.season) || 1) === currentSeason && (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id)));
       
       teamMatches.forEach(m => {
         const isHome = String(m.home_team) === String(team.id);
-        stats.goalsFor += isHome ? m.home_goals : m.away_goals;
-        stats.goalsAgainst += isHome ? m.away_goals : m.home_goals;
         const gFor = isHome ? m.home_goals : m.away_goals;
         const gAg = isHome ? m.away_goals : m.home_goals;
+        stats.goalsFor += gFor; stats.goalsAgainst += gAg;
         if (gFor > gAg) { stats.wins += 1; stats.points += 3; }
         else if (gFor === gAg) { stats.draws += 1; stats.points += 1; }
         else { stats.losses += 1; }
       });
-      return { ...team, stats, points: stats.points };
-    });
-  }, [teams, matches, currentSeason, isLoaded]);
 
-  // --- VALUE PARA PROVIDER (CUMPLIENDO TYPES.TS) ---
+      // Procesar estadísticas de jugadores basadas en eventos de simulación
+      const updatedRoster = (team.roster || []).map(player => {
+        const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
+        return {
+          ...player,
+          stats: {
+            ...player.stats,
+            goals: pEvents.filter(e => e.type === 'GOAL').length,
+            assists: pEvents.filter(e => e.type === 'ASSIST').length,
+            cards: {
+              yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
+              red: pEvents.filter(e => e.type === 'RED_CARD').length
+            }
+          }
+        };
+      });
+
+      return { ...team, stats, points: stats.points, roster: updatedRoster };
+    });
+  }, [teams, matches, matchEvents, currentSeason, isLoaded]);
+
   const value: LeagueContextType = {
     teams: processedTeams,
     divisions,
     matches,
     matchEvents,
-    players: teams.flatMap(t => t.roster || []),
+    players: processedTeams.flatMap(t => t.roster || []),
     isLoaded,
     sessionId,
     season: currentSeason,
@@ -187,8 +203,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     addPlayerToTeam: (tid, p) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: [...(t.roster || []), p]} : t)),
     removePlayerFromTeam: (tid, pid) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: (t.roster || []).filter(p => String(p.id) !== String(pid))} : t)),
     getTeamById: (id) => processedTeams.find(t => String(t.id) === String(id)),
-    getPlayerById: (id) => teams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
-    getTeamByPlayerId: (pid) => teams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
+    getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
+    getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
     simulateMatchday,
     getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)),
     getTeamOfTheWeek: (w) => [], 
@@ -210,12 +226,9 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       window.location.reload();
     },
     importLeagueData: (newData) => {
-      try {
-        const teamsToSave = newData.teams || newData;
-        localStorage.setItem('league_active_teams', JSON.stringify(teamsToSave));
-        setTeams(teamsToSave);
-        return true;
-      } catch (e) { return false; }
+      localStorage.setItem('league_active_teams', JSON.stringify(newData));
+      setTeams(newData);
+      return true;
     },
     refreshData
   };
