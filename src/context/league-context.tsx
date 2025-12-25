@@ -139,85 +139,84 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, [teams, matches, matchEvents, currentSeason, isLoaded]);
 
   /* ===================== SIMULACIÓN ===================== */
-  const simulateMatchday = useCallback(async () => {
-    const round =
-      Math.max(0, ...matches.map((m) => Number(m.round || 0))) + 1;
+const simulateMatchday = useCallback(async () => {
+  const nextWeek =
+    Math.max(0, ...matches.map((m) => m.week || 0)) + 1;
 
-    const validTeams = processedTeams.filter(
-      (t) => (t.roster?.length || 0) >= 11
+  for (const division of divisions) {
+    const teamsByDivision = processedTeams.filter(
+      (t) =>
+        t.division_id === division.id &&
+        (t.roster?.length || 0) >= 11
     );
-    if (validTeams.length < 2) return;
 
-    const home = validTeams[0];
-    const away = validTeams[1];
+    if (teamsByDivision.length < 2) continue;
 
-    const homeGoals = Math.floor(Math.random() * 4);
-    const awayGoals = Math.floor(Math.random() * 4);
+    // Emparejar 2 a 2
+    for (let i = 0; i < teamsByDivision.length; i += 2) {
+      const home = teamsByDivision[i];
+      const away = teamsByDivision[i + 1];
+      if (!away) continue;
 
-    const { data: match } = await supabase
-      .from("matches")
-      .insert({
-        session_id: sessionId,
-        season: currentSeason,
-        round,
-        division_id: home.division_id,
-        home_team: home.id,
-        away_team: away.id,
-        home_goals: homeGoals,
-        away_goals: awayGoals,
-        played: true,
-      })
-      .select()
-      .single();
+      const homeGoals = Math.floor(Math.random() * 4);
+      const awayGoals = Math.floor(Math.random() * 4);
 
-    if (!match) return;
+      const { data: match } = await supabase
+        .from("matches")
+        .insert({
+          session_id: sessionId,
+          season: currentSeason,
+          week: nextWeek,
+          round: nextWeek,
+          division_id: division.id,
+          home_team: home.id,
+          away_team: away.id,
+          home_goals: homeGoals,
+          away_goals: awayGoals,
+          played: true,
+        })
+        .select()
+        .single();
 
-    const events: MatchEvent[] = [];
-    const ratings = new Map<string, number>();
+      if (!match) continue;
 
-    const randomPlayer = (team: Team) =>
-      team.roster[Math.floor(Math.random() * team.roster.length)];
+      const events: MatchEvent[] = [];
 
-    const addGoal = (team: Team) => {
-      const scorer = randomPlayer(team);
-      ratings.set(
-        String(scorer.id),
-        (ratings.get(String(scorer.id)) || 6) + 1.5
-      );
+      const randomPlayer = (team: Team) =>
+        team.roster[Math.floor(Math.random() * team.roster.length)];
 
-      events.push({
-        match_id: match.id,
-        team_id: team.id,
-        player_id: scorer.id,
-        type: "GOAL",
-        minute: Math.floor(Math.random() * 90) + 1,
-        session_id: sessionId,
-      });
-    };
-
-    [...Array(homeGoals)].forEach(() => addGoal(home));
-    [...Array(awayGoals)].forEach(() => addGoal(away));
-
-    let mvpId: string | null = null;
-    let best = -Infinity;
-
-    ratings.forEach((v, k) => {
-      if (v > best) {
-        best = v;
-        mvpId = k;
+      for (let g = 0; g < homeGoals; g++) {
+        const p = randomPlayer(home);
+        events.push({
+          match_id: match.id,
+          team_id: home.id,
+          player_id: p.id,
+          type: "GOAL",
+          minute: Math.floor(Math.random() * 90) + 1,
+          session_id: sessionId,
+        });
       }
-    });
 
-    if (mvpId) {
-      await supabase.from("matches").update({ mvpId }).eq("id", match.id);
+      for (let g = 0; g < awayGoals; g++) {
+        const p = randomPlayer(away);
+        events.push({
+          match_id: match.id,
+          team_id: away.id,
+          player_id: p.id,
+          type: "GOAL",
+          minute: Math.floor(Math.random() * 90) + 1,
+          session_id: sessionId,
+        });
+      }
+
+      if (events.length) {
+        await supabase.from("match_events").insert(events);
+      }
     }
+  }
 
-    if (events.length) {
-      await supabase.from("match_events").insert(events);
-    }
-
-    await refreshData();
-  }, [processedTeams, matches, sessionId, currentSeason, refreshData]);
+  await refreshData();
+}, [processedTeams, matches, divisions, sessionId, currentSeason, refreshData]);
 
   /* ===================== UTILIDADES ===================== */
   const getTeamOfTheWeek = (week: number): TeamOfTheWeekPlayer[] => {
