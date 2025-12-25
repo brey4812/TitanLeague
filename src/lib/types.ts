@@ -29,7 +29,8 @@ export interface Player {
     suspendedUntilWeek?: number;   // semana hasta la que está sancionado
   };
 
-  stats: {
+  /** ⭐ ESTADÍSTICAS DEL JUGADOR (Opcional para evitar errores stats undefined) */
+  stats?: {
     goals: number;
     assists: number;
     cleanSheets: number;
@@ -59,6 +60,7 @@ export interface Team {
   division_id: number;
   divisionName?: string;
 
+  /** ⭐ ESTADÍSTICAS ACUMULADAS (Cálculo dinámico en Contexto) */
   stats?: {
     wins: number;
     draws: number;
@@ -198,6 +200,7 @@ export interface LeagueContextType {
     bestGoalkeeper: Player | undefined;
   };
 
+  /** 🏆 SORTEO DE COMPETICIÓN INTERNACIONAL */
   drawTournament: (
     competitionName: 'The Titan Peak' | 'Colossus Shield'
   ) => Promise<void>;

@@ -5,35 +5,36 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LeagueTableClient } from "@/components/leagues/league-table-client";
 import { LeagueContext } from "@/context/league-context";
-import { Trophy, Download } from "lucide-react"; // Importamos Download
-import { Division } from "@/lib/types";
-import { Button } from "@/components/ui/button"; // Importamos Button
+import { Trophy, Download, Calendar } from "lucide-react";
+import { Division, Team } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export default function LeaguesPage() {
-  const { divisions, teams, isLoaded } = useContext(LeagueContext);
+  // Extraemos season para mostrar en qué temporada estamos
+  const { divisions, teams, isLoaded, season } = useContext(LeagueContext);
 
-  // FUNCIÓN DE DESCARGA REINTEGRADA
-  const downloadDivisionCSV = (divisionName: string, divisionTeams: any[]) => {
+  // FUNCIÓN DE DESCARGA OPTIMIZADA
+  const downloadDivisionCSV = (divisionName: string, divisionTeams: Team[]) => {
     if (!divisionTeams.length) return;
 
     let csvContent = "data:text/csv;charset=utf-8,";
-    let fileName = `clasificacion_${divisionName.toLowerCase().replace(/\s+/g, '_')}.csv`;
+    let fileName = `clasificacion_T${season}_${divisionName.toLowerCase().replace(/\s+/g, '_')}.csv`;
     
-    // Encabezados (Ajustados a los campos de tu contexto)
+    // Encabezados sincronizados con processedTeams del contexto
     const headers = ["Equipo", "PJ", "PG", "PE", "PP", "GF", "GC", "DG", "Puntos"];
     csvContent += headers.join(",") + "\r\n";
 
-    // Filas: Usamos los nombres de propiedades que vienen de tu LeagueContext/Standings
     divisionTeams.forEach((t) => {
       const row = [
         t.name,
-        t.played || 0,
-        t.won || 0,
-        t.drawn || 0,
-        t.lost || 0,
-        t.gf || 0,
-        t.ga || 0,
-        (t.gf || 0) - (t.ga || 0),
+        t.stats?.wins! + t.stats?.draws! + t.stats?.losses! || 0, // Partidos Jugados
+        t.stats?.wins || 0,
+        t.stats?.draws || 0,
+        t.stats?.losses || 0,
+        t.stats?.goalsFor || 0,
+        t.stats?.goalsAgainst || 0,
+        (t.stats?.goalsFor || 0) - (t.stats?.goalsAgainst || 0),
         t.points || 0
       ];
       csvContent += row.join(",") + "\r\n";
@@ -58,16 +59,24 @@ export default function LeaguesPage() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <PageHeader
-          title="Clasificación"
-          description="Consulta los puntos y el rendimiento de los clubes por división."
-        />
-        {/* Botón de descarga global (opcional) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <PageHeader
+              title="Clasificación"
+              description="Consulta los puntos y el rendimiento de los clubes por división."
+            />
+            {/* Badge de Temporada para claridad visual */}
+            <Badge variant="secondary" className="h-fit py-1 px-3 flex gap-2 border-blue-200 bg-blue-50 text-blue-700">
+              <Calendar className="h-3 w-3" /> Temporada {season}
+            </Badge>
+          </div>
+        </div>
+
         {teams.length > 0 && (
-            <Button variant="outline" size="sm" onClick={() => downloadDivisionCSV("General", teams)}>
-                <Download className="h-4 w-4 mr-2" /> Exportar Todo
-            </Button>
+          <Button variant="outline" size="sm" onClick={() => downloadDivisionCSV("General", teams)}>
+            <Download className="h-4 w-4 mr-2" /> Exportar Todo (.csv)
+          </Button>
         )}
       </div>
 
@@ -79,12 +88,12 @@ export default function LeaguesPage() {
         </div>
       ) : (
         <Tabs defaultValue={divisions[0]?.id.toString()} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto bg-slate-100 p-1 border">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto bg-slate-100 p-1 border shadow-sm rounded-lg">
             {divisions.map((div: Division) => (
               <TabsTrigger 
                 key={div.id} 
                 value={div.id.toString()} 
-                className="font-bold py-2"
+                className="font-bold py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
               >
                 {div.name}
               </TabsTrigger>
@@ -92,27 +101,34 @@ export default function LeaguesPage() {
           </TabsList>
 
           {divisions.map((div: Division) => {
-            const teamsInDivision = teams.filter(t => t.division_id === div.id);
+            // Filtrado dinámico por división
+            const teamsInDivision = teams
+              .filter(t => t.division_id === div.id)
+              .sort((a, b) => (b.points || 0) - (a.points || 0)); // Aseguramos orden descendente por puntos
 
             return (
-              <TabsContent key={div.id} value={div.id.toString()} className="mt-6 space-y-4">
+              <TabsContent key={div.id} value={div.id.toString()} className="mt-6 space-y-4 focus-visible:outline-none">
                 {teamsInDivision.length > 0 ? (
                   <>
-                    <div className="flex justify-end">
-                        <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-xs text-muted-foreground hover:text-blue-600"
-                            onClick={() => downloadDivisionCSV(div.name, teamsInDivision)}
-                        >
-                            <Download className="h-3 w-3 mr-2" /> Descargar {div.name} (.csv)
-                        </Button>
+                    <div className="flex justify-between items-center bg-white p-3 border rounded-xl shadow-sm">
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Mostrando <span className="font-bold text-foreground">{teamsInDivision.length}</span> equipos en competencia.
+                      </p>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        onClick={() => downloadDivisionCSV(div.name, teamsInDivision)}
+                      >
+                        <Download className="h-3.5 w-3.5 mr-2" /> Descargar {div.name}
+                      </Button>
                     </div>
+                    {/* El componente LeagueTableClient recibe los equipos ya procesados con sus puntos */}
                     <LeagueTableClient division={div} teams={teamsInDivision} />
                   </>
                 ) : (
-                  <div className="py-20 text-center bg-white italic text-muted-foreground border rounded-xl">
-                    No hay equipos en esta división aún.
+                  <div className="py-20 text-center bg-white italic text-muted-foreground border border-dashed rounded-xl">
+                    No hay equipos compitiendo en esta división para la Temporada {season}.
                   </div>
                 )}
               </TabsContent>

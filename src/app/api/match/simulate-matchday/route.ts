@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Inicialización con SERVICE_ROLE_KEY para omitir RLS y asegurar escritura
+// Inicialización con SERVICE_ROLE_KEY para asegurar permisos de escritura
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY! 
@@ -21,15 +21,14 @@ interface TeamData {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    // Añadimos seasonId a los parámetros para filtrar correctamente
+    // Es vital recibir el seasonId desde el context para no mezclar temporadas
     const { divisionId, week, sessionId, seasonId } = body;
 
     if (!divisionId || !week || !sessionId) {
       return NextResponse.json({ ok: false, error: "Faltan parámetros requeridos" }, { status: 400 });
     }
 
-    // 1. Obtener partidos pendientes
-    // CORRECCIÓN: Filtramos por session_id y opcionalmente season_id, NUNCA por 'season'
+    // 1. Obtener partidos pendientes de la temporada ACTIVA
     let query = supabase
       .from("matches")
       .select("*")
@@ -38,6 +37,7 @@ export async function POST(req: Request) {
       .eq("played", false)
       .eq("session_id", sessionId);
 
+    // Si pasamos seasonId, filtramos estrictamente por esa temporada para evitar errores de duplicados
     if (seasonId) {
       query = query.eq("season_id", seasonId);
     }
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     if (matchError) throw matchError;
 
     if (!matches || matches.length === 0) {
-      return NextResponse.json({ ok: true, message: "No hay partidos pendientes para simular" });
+      return NextResponse.json({ ok: true, message: "No hay partidos pendientes" });
     }
 
     // 2. Obtener jugadores de los equipos involucrados
@@ -66,6 +66,7 @@ export async function POST(req: Request) {
         away: allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || []
       };
 
+      // Simulación básica de titulares
       const activePlayers: TeamData = {
         home: rosters.home.slice(0, 11),
         away: rosters.away.slice(0, 11)
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
       let homeScore = 0;
       let awayScore = 0;
 
-      // SIMULACIÓN LÓGICA
+      // SIMULACIÓN LÓGICA DE 90 MINUTOS
       for (let minute = 1; minute <= 90; minute++) {
         (["home", "away"] as const).forEach(side => {
           const teamId = side === "home" ? match.home_team : match.away_team;
@@ -82,8 +83,8 @@ export async function POST(req: Request) {
 
           if (available.length === 0) return;
 
-          // Evento de Gol (Probabilidad 0.7%)
-          if (Math.random() < 0.007) {
+          // Evento de Gol (Probabilidad 0.8% por minuto para asegurar acción)
+          if (Math.random() < 0.008) {
             const scorer = available[Math.floor(Math.random() * available.length)];
             side === "home" ? homeScore++ : awayScore++;
 
@@ -93,7 +94,8 @@ export async function POST(req: Request) {
               type: "GOAL",
               minute,
               player_id: scorer.id,
-              player_name: scorer.name, // Sincronizado con tabla match_events
+              // player_name es fundamental para que la UI no pierda el nombre
+              player_name: scorer.name, 
               session_id: sessionId
             });
           }
@@ -101,8 +103,7 @@ export async function POST(req: Request) {
       }
 
       // 3. Actualizar la tabla física de 'matches'
-      // Al actualizar 'home_goals', 'away_goals' y 'played', 
-      // la vista 'league_table' calculará los puntos automáticamente
+      // Al actualizar 'played: true', la vista 'league_table' recalculará posiciones
       const { error: updateError } = await supabase
         .from("matches")
         .update({
@@ -114,14 +115,14 @@ export async function POST(req: Request) {
 
       if (updateError) console.error(`Error actualizando partido ${match.id}:`, updateError);
 
-      // 4. Inserción de eventos
+      // 4. Inserción de eventos generados
       if (matchEvents.length > 0) {
         const { error: eventsError } = await supabase.from("match_events").insert(matchEvents);
-        if (eventsError) console.error(`Error insertando eventos del partido ${match.id}:`, eventsError);
+        if (eventsError) console.error(`Error insertando eventos:`, eventsError);
       }
     }
 
-    return NextResponse.json({ ok: true, message: "Simulación completada con éxito" });
+    return NextResponse.json({ ok: true, message: "Simulación completada" });
   } catch (err: any) {
     console.error("SIM ERROR:", err);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });

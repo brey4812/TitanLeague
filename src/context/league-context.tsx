@@ -47,7 +47,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
         supabase.from('matches').select('*').eq('session_id', sessionId).order('round', { ascending: true }),
         supabase.from('match_events').select('*').eq('session_id', sessionId),
-        // Sincronización con columna 'season_number' de la DB
         supabase.from('seasons').select('id, season_number').eq('is_active', true).maybeSingle()
       ]);
 
@@ -72,7 +71,41 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- MOTOR DE GENERACIÓN (CORREGIDO PARA EVITAR ERROR 400) ---
+  // --- LÓGICA DE ASCENSOS Y DESCENSOS ---
+  const applyPromotionsAndRelegations = useCallback((currentTeams: Team[]) => {
+    const teamsByDiv: Record<number, Team[]> = { 1: [], 2: [], 3: [], 4: [] };
+    currentTeams.forEach(t => { if (teamsByDiv[t.division_id]) teamsByDiv[t.division_id].push(t); });
+
+    Object.keys(teamsByDiv).forEach(id => {
+      teamsByDiv[Number(id)].sort((a, b) => (b.points || 0) - (a.points || 0));
+    });
+
+    const newTeams = [...currentTeams];
+    const move = (teamId: any, newDiv: number) => {
+      const idx = newTeams.findIndex(t => t.id === teamId);
+      if (idx !== -1) newTeams[idx].division_id = newDiv;
+    };
+
+    if (teamsByDiv[1].length >= 4) teamsByDiv[1].slice(-2).forEach(t => move(t.id, 2));
+    if (teamsByDiv[2].length >= 2) teamsByDiv[2].slice(0, 2).forEach(t => move(t.id, 1));
+    if (teamsByDiv[2].length >= 6) teamsByDiv[2].slice(-2).forEach(t => move(t.id, 3));
+    if (teamsByDiv[3].length >= 2) teamsByDiv[3].slice(0, 2).forEach(t => move(t.id, 2));
+    if (teamsByDiv[3].length >= 6) teamsByDiv[3].slice(-2).forEach(t => move(t.id, 4));
+    if (teamsByDiv[4].length >= 2) teamsByDiv[4].slice(0, 2).forEach(t => move(t.id, 3));
+
+    return newTeams.map(team => ({
+      ...team,
+      points: 0,
+      stats: { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 },
+      roster: (team.roster || []).map(player => ({
+        ...player,
+        rating: 6.0,
+        stats: { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 }
+      }))
+    }));
+  }, []);
+
+  // --- MOTOR DE GENERACIÓN DINÁMICO ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId || !currentSeasonId) return;
 
@@ -80,69 +113,33 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
-      // 1. Asegurar registro en la tabla física 'standings'
-      const { data: currentStandings } = await supabase
-        .from('standings')
-        .select('team_id')
-        .eq('season_id', currentSeasonId);
-
-      const teamsToRegister = divTeams.filter(dt => 
-        !currentStandings?.some(s => Number(s.team_id) === Number(dt.id))
-      );
-
-      if (teamsToRegister.length > 0) {
-        const standingsInsert = teamsToRegister.map(t => ({
-          team_id: Number(t.id),
-          season_id: currentSeasonId,
-          played: 0, wins: 0, draws: 0, losses: 0, goals_for: 0, goals_against: 0, points: 0
-        }));
-        await supabase.from('standings').insert(standingsInsert);
+      const { data: standings } = await supabase.from('standings').select('team_id').eq('season_id', currentSeasonId);
+      const toReg = divTeams.filter(dt => !standings?.some(s => Number(s.team_id) === Number(dt.id)));
+      if (toReg.length > 0) {
+        await supabase.from('standings').insert(toReg.map(t => ({
+          team_id: Number(t.id), season_id: currentSeasonId, played: 0, wins: 0, draws: 0, losses: 0, goals_for: 0, goals_against: 0, points: 0
+        })));
       }
 
-      // 2. Verificar existencia de partidos usando season_id (NO season)
-      const existingMatches = matches.filter(m => 
-        Number(m.division_id) === div.id && m.season_id === currentSeasonId
-      );
+      const targetRound = 1;
+      const teamsWithMatch = new Set(matches.filter(m => m.round === targetRound && String(m.season_id) === String(currentSeasonId) && m.division_id === div.id).flatMap(m => [String(m.home_team), String(m.away_team)]));
+      const available = divTeams.filter(t => !teamsWithMatch.has(String(t.id)));
 
-      if (existingMatches.length > 0) continue;
+      if (available.length < 2) continue;
 
-      // Algoritmo de Berger
-      let scheduleTeams = [...divTeams].sort((a, b) => String(a.id).localeCompare(String(b.id)));
-      if (scheduleTeams.length % 2 !== 0) scheduleTeams.push({ id: "ghost", name: "Descanso" } as any);
-
-      const n = scheduleTeams.length;
-      const matchesToCreate = [];
-
-      const fixed = scheduleTeams[0];
-      const rest = scheduleTeams.slice(1);
-      const currentRound = [fixed, ...rest];
-
-      for (let i = 0; i < n / 2; i++) {
-        const teamA = currentRound[i];
-        const teamB = currentRound[n - 1 - i];
-        if (teamA.id === "ghost" || teamB.id === "ghost") continue;
-
-        matchesToCreate.push({
-          home_team: Number(teamA.id),
-          away_team: Number(teamB.id),
-          round: 1,
-          played: false,
-          division_id: div.id,
-          competition: "League",
-          session_id: sessionId,
-          // Sincronización exacta con DB
-          season_id: currentSeasonId 
-        });
-      }
-
-      if (matchesToCreate.length > 0) {
-        console.log(`Generando ${matchesToCreate.length} partidos para división ${div.id}`);
-        const { data, error } = await supabase.from('matches').insert(matchesToCreate).select();
-        if (error) {
-          console.error("ERROR PGRST204 SOLUCIONADO:", error.message);
-        } else if (data) {
-          setMatches(prev => [...prev, ...data]);
+      const toCreate = [];
+      for (let i = 0; i < available.length; i += 2) {
+        if (i + 1 < available.length) {
+          toCreate.push({
+            home_team: Number(available[i].id), away_team: Number(available[i + 1].id),
+            round: targetRound, played: false, division_id: div.id,
+            competition: "League", session_id: sessionId, season_id: currentSeasonId 
+          });
         }
+      }
+      if (toCreate.length > 0) {
+        const { data } = await supabase.from('matches').insert(toCreate).select();
+        if (data) setMatches(prev => [...prev, ...data]);
       }
     }
   }, [teams, matches, isLoaded, sessionId, currentSeasonId, divisions]);
@@ -152,13 +149,19 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(timer);
   }, [teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESADO ESTADÍSTICAS ---
+  // --- PROCESADO DE EQUIPOS (BLINDAJE DE STATS) ---
   const processedTeams = useMemo(() => {
     if (!isLoaded || teams.length === 0) return [];
-
+    
     return teams.map(team => {
+      // 1. Inicializar objeto de estadísticas base para evitar undefined en la UI
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
-      const teamMatches = matches.filter(m => m.played && m.season_id === currentSeasonId && (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id)));
+      
+      const teamMatches = matches.filter(m => 
+        m.played && 
+        String(m.season_id) === String(currentSeasonId) && 
+        (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id))
+      );
       
       teamMatches.forEach(m => {
         const isHome = String(m.home_team) === String(team.id);
@@ -171,30 +174,26 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       });
 
       const updatedRoster = (team.roster || []).map(player => {
-        const playerMatchRatings: number[] = [];
+        // Inicializar objeto stats del jugador para seguridad
+        const playerStats = player.stats || { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 };
+        const ratings: number[] = [];
+        
         teamMatches.forEach(match => {
-          const eventsInMatch = matchEvents.filter(e => String(e.match_id) === String(match.id));
+          const events = matchEvents.filter(e => String(e.match_id) === String(match.id));
           const isHome = String(match.home_team) === String(team.id);
           const cleanSheet = (isHome ? Number(match.away_goals) : Number(match.home_goals)) === 0;
-          playerMatchRatings.push(calculatePlayerRating(player, eventsInMatch, cleanSheet));
+          ratings.push(calculatePlayerRating(player, events, cleanSheet));
         });
 
         const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
-        const avgRating = playerMatchRatings.length > 0 
-          ? Number((playerMatchRatings.reduce((a, b) => a + b, 0) / playerMatchRatings.length).toFixed(2))
-          : 6.0;
-
+        
         return {
           ...player,
-          rating: avgRating,
-          stats: {
-            ...player.stats,
-            goals: pEvents.filter(e => e.type === 'GOAL').length,
-            assists: matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name)).length,
-            cards: {
-              yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
-              red: pEvents.filter(e => e.type === 'RED_CARD').length
-            }
+          rating: ratings.length > 0 ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)) : 6.0,
+          stats: { 
+            ...playerStats, 
+            goals: pEvents.filter(e => e.type === 'GOAL').length, 
+            assists: matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name)).length 
           }
         };
       });
@@ -212,7 +211,23 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     isLoaded,
     sessionId,
     season: currentSeason,
-    nextSeason: () => {},
+    nextSeason: async () => {
+      if (!confirm("¿Cerrar temporada y aplicar ascensos/descensos?")) return;
+      
+      const updatedTeams = applyPromotionsAndRelegations(processedTeams);
+      setTeams(updatedTeams);
+      localStorage.setItem('league_active_teams', JSON.stringify(updatedTeams));
+
+      const { data: nextS } = await supabase.from('seasons').insert([{ season_number: currentSeason + 1, is_active: true }]).select().single();
+      if (nextS) {
+        await supabase.from('seasons').update({ is_active: false }).eq('id', currentSeasonId);
+        setCurrentSeason(nextS.season_number);
+        setCurrentSeasonId(nextS.id);
+        setMatches([]);
+        setMatchEvents([]);
+        alert(`Temporada ${nextS.season_number} iniciada.`);
+      }
+    },
     addTeam: (t) => setTeams(prev => [...prev, t]),
     deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))),
     updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)),
@@ -223,32 +238,31 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
     simulateMatchday: async () => {
       const week = matches.find(m => !m.played)?.round || 1;
-      await fetch("/api/match/simulate-matchday", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ divisionId: 1, week, sessionId }),
+      await fetch("/api/match/simulate-matchday", { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify({ divisionId: 1, week, sessionId, seasonId: currentSeasonId }) 
       });
       await refreshData();
     },
-    getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({
-      ...e,
-      playerName: (e as any).player_name || e.playerName,
-      assistName: (e as any).assist_name || e.assistName,
-      playerOutName: (e as any).player_out_name || e.playerOutName
-    })),
-    getTeamOfTheWeek: (w) => [],
+    getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({ ...e, playerName: (e as any).player_name || e.playerName, assistName: (e as any).assist_name || e.assistName })),
+    getTeamOfTheWeek: (w) => {
+      const weekM = matches.filter(m => m.round === w && m.played);
+      const candidates = processedTeams.flatMap(t => t.roster || []).filter(p => weekM.some(m => String(m.home_team) === String(p.team_id) || String(m.away_team) === String(p.team_id)));
+      return candidates.sort((a,b) => b.rating - a.rating).slice(0, 11) as any;
+    },
     getBestEleven: (t, v) => [],
     lastPlayedWeek: matches.filter(m => m.played).length === 0 ? 1 : Math.max(...matches.filter(m => m.played).map(m => Number(m.round || 0))),
-    getLeagueQualifiers: (divId) => ({ titanPeak: [], colossusShield: [] }),
-    getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
-    drawTournament: async (n) => {}, 
-    resetLeagueData: async () => { 
-        if(confirm("¿Resetear?")) { 
-            await supabase.from('matches').delete().eq('session_id', sessionId); 
-            localStorage.clear(); 
-            window.location.reload(); 
-        } 
+    getLeagueQualifiers: (divId) => {
+      const sorted = processedTeams.filter(t => t.division_id === divId).sort((a,b) => (b.points || 0) - (a.points || 0));
+      return { titanPeak: sorted.slice(0, 4), colossusShield: sorted.slice(4, 8) };
     },
+    getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
+    drawTournament: async (n) => {
+        console.log("Sorteando torneo:", n);
+        // Lógica futura para rellenar con externos
+    }, 
+    resetLeagueData: async () => { if(confirm("¿Resetear?")) { await supabase.from('matches').delete().eq('session_id', sessionId); localStorage.clear(); window.location.reload(); } },
     importLeagueData: (newData) => { localStorage.setItem('league_active_teams', JSON.stringify(newData)); setTeams(newData); return true; },
     refreshData
   };

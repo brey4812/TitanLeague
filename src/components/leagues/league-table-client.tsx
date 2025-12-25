@@ -13,14 +13,17 @@ import {
 
 interface LeagueTableClientProps {
   division: Division;
-  teams: Team[]; // Recibimos los equipos filtrados desde la página
+  teams: Team[];
 }
 
 export function LeagueTableClient({ division, teams }: LeagueTableClientProps) {
-  const calculatePoints = (team: Team) => (team.stats.wins * 3) + team.stats.draws;
-  const goalDiff = (team: Team) => team.stats.goalsFor - team.stats.goalsAgainst;
+  // CORRECCIÓN: Funciones blindadas contra undefined
+  const calculatePoints = (team: Team) => 
+    ((team.stats?.wins || 0) * 3) + (team.stats?.draws || 0);
 
-  // Corregido: Usamos el array 'teams' que viene de las props
+  const goalDiff = (team: Team) => 
+    (team.stats?.goalsFor || 0) - (team.stats?.goalsAgainst || 0);
+
   const sortedTeams = [...teams].sort((a, b) => {
     const pointsA = calculatePoints(a);
     const pointsB = calculatePoints(b);
@@ -30,7 +33,7 @@ export function LeagueTableClient({ division, teams }: LeagueTableClientProps) {
     const diffB = goalDiff(b);
     if (diffB !== diffA) return diffB - diffA;
     
-    return b.stats.goalsFor - a.stats.goalsFor;
+    return (b.stats?.goalsFor || 0) - (a.stats?.goalsFor || 0);
   });
 
   return (
@@ -50,12 +53,29 @@ export function LeagueTableClient({ division, teams }: LeagueTableClientProps) {
         </TableHeader>
         <TableBody>
           {sortedTeams.map((team, index) => {
-            const pj = team.stats.wins + team.stats.draws + team.stats.losses;
+            // CORRECCIÓN: Acceso seguro con fallback a 0
+            const pj = (team.stats?.wins || 0) + (team.stats?.draws || 0) + (team.stats?.losses || 0);
             const pts = calculatePoints(team);
             const dg = goalDiff(team);
 
+            // --- LÓGICA DE INDICADORES VISUALES ---
+            let rowStyle = "hover:bg-slate-50/50 transition-colors";
+            
+            if (division.id === 1) {
+              // Clasificación internacional (Blue: Champions, Orange: Shield)
+              if (index < 4) rowStyle += " border-l-4 border-l-blue-600 bg-blue-50/20"; 
+              else if (index >= 4 && index < 8) rowStyle += " border-l-4 border-l-orange-400 bg-orange-50/10";
+              else if (index >= sortedTeams.length - 2 && sortedTeams.length > 4) rowStyle += " border-l-4 border-l-red-500 bg-red-50/10";
+            } else {
+              // Ascensos y descensos
+              if (index < 2) rowStyle += " border-l-4 border-l-green-600 bg-green-50/20";
+              else if (index >= sortedTeams.length - 2 && sortedTeams.length > 4 && division.id !== 4) {
+                rowStyle += " border-l-4 border-l-red-500 bg-red-50/10";
+              }
+            }
+
             return (
-              <TableRow key={team.id} className="hover:bg-slate-50/50">
+              <TableRow key={team.id} className={rowStyle}>
                 <TableCell className="text-center font-medium italic text-muted-foreground">
                   {index + 1}
                 </TableCell>
@@ -76,9 +96,9 @@ export function LeagueTableClient({ division, teams }: LeagueTableClientProps) {
                   </div>
                 </TableCell>
                 <TableCell className="text-center font-bold">{pj}</TableCell>
-                <TableCell className="text-center text-green-600">{team.stats.wins}</TableCell>
-                <TableCell className="text-center text-slate-500">{team.stats.draws}</TableCell>
-                <TableCell className="text-center text-red-600">{team.stats.losses}</TableCell>
+                <TableCell className="text-center text-green-600">{team.stats?.wins || 0}</TableCell>
+                <TableCell className="text-center text-slate-500">{team.stats?.draws || 0}</TableCell>
+                <TableCell className="text-center text-red-600">{team.stats?.losses || 0}</TableCell>
                 <TableCell className={`text-center font-bold ${dg >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {dg > 0 ? `+${dg}` : dg}
                 </TableCell>
@@ -90,6 +110,18 @@ export function LeagueTableClient({ division, teams }: LeagueTableClientProps) {
           })}
         </TableBody>
       </Table>
+      
+      {/* LEYENDA INFORMATIVA */}
+      <div className="p-3 bg-slate-50 border-t flex flex-wrap gap-4 text-[10px] font-bold uppercase text-muted-foreground">
+        {division.id === 1 ? (
+          <>
+            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-600 rounded-full" /> The Titan Peak</div>
+            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-orange-400 rounded-full" /> Colossus Shield</div>
+          </>
+        ) : (
+          <div className="flex items-center gap-1"><div className="w-2 h-2 bg-green-600 rounded-full" /> Zona de Ascenso</div>
+        )}
+      </div>
     </div>
   );
 }
