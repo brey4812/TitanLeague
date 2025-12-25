@@ -105,7 +105,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  // --- MOTOR DE CALENDARIO COMPLETO (SISTEMA BERGER) ---
+  // --- MOTOR DE CALENDARIO DINÁMICO (BORRA Y REGENERA SI HAY CAMBIOS) ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId || !currentSeasonId) return;
 
@@ -113,27 +113,30 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
-      // Verificar si ya existe el calendario para esta división y temporada
-      const { data: existing } = await supabase
+      // 1. Verificar si el número de equipos en la DB coincide con los equipos actuales
+      const { data: existingMatches } = await supabase
         .from('matches')
-        .select('id')
+        .select('home_team, away_team')
+        .eq('division_id', div.id)
+        .eq('season_id', currentSeasonId)
+        .eq('session_id', sessionId);
+
+      const existingTeamsIds = new Set(existingMatches?.flatMap(m => [String(m.home_team), String(m.away_team)]));
+      
+      // Si todos los equipos actuales ya están en el calendario, no hacemos nada
+      const allTeamsRegistered = divTeams.every(t => existingTeamsIds.has(String(t.id)));
+      if (allTeamsRegistered && existingMatches && existingMatches.length > 0) continue;
+
+      // 2. Limpieza de partidos NO jugados para regenerar calendario limpio
+      await supabase
+        .from('matches')
+        .delete()
         .eq('division_id', div.id)
         .eq('season_id', currentSeasonId)
         .eq('session_id', sessionId)
-        .limit(1);
+        .eq('played', false);
 
-      if (existing && existing.length > 0) continue;
-
-      // Registro masivo en Standings
-      const { data: standings } = await supabase.from('standings').select('team_id').eq('season_id', currentSeasonId);
-      const toReg = divTeams.filter(dt => !standings?.some(s => Number(s.team_id) === Number(dt.id)));
-      if (toReg.length > 0) {
-        await supabase.from('standings').insert(toReg.map(t => ({
-          team_id: Number(t.id), season_id: currentSeasonId, played: 0, wins: 0, draws: 0, losses: 0, goals_for: 0, goals_against: 0, points: 0
-        })));
-      }
-
-      // Algoritmo de Berger para Calendario de Ida y Vuelta
+      // 3. Algoritmo de Berger (Ida y Vuelta)
       let scheduleTeams = [...divTeams];
       if (scheduleTeams.length % 2 !== 0) {
         scheduleTeams.push({ id: "FREE", name: "DESCANSO" } as any);
@@ -160,8 +163,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
               session_id: sessionId,
               season_id: currentSeasonId 
             });
-
-            // VUELTA (Espejo de la Ida)
+            // VUELTA
             allMatches.push({
               home_team: Number(away.id),
               away_team: Number(home.id),
@@ -174,13 +176,17 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             });
           }
         }
-        // Rotación de Berger: dejamos el primero fijo y rotamos el resto
         scheduleTeams.splice(1, 0, scheduleTeams.pop()!);
       }
 
       if (allMatches.length > 0) {
         const { data, error } = await supabase.from('matches').insert(allMatches).select();
-        if (data) setMatches(prev => [...prev, ...data]);
+        if (data) {
+          setMatches(prev => {
+            const filtered = prev.filter(m => m.division_id !== div.id || m.played);
+            return [...filtered, ...data];
+          });
+        }
       }
     }
   }, [teams, matches, isLoaded, sessionId, currentSeasonId, divisions]);
@@ -190,7 +196,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(timer);
   }, [teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESADO DE EQUIPOS (BLINDAJE DE STATS) ---
+  // --- PROCESADO DE EQUIPOS (STATS) ---
   const processedTeams = useMemo(() => {
     if (!isLoaded || teams.length === 0) return [];
     
@@ -276,7 +282,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
     simulateMatchday: async () => {
-      // Buscar la jornada más baja que tenga partidos sin jugar
       const nextMatch = matches.find(m => !m.played);
       if (!nextMatch) {
         alert("No hay más jornadas para simular.");
