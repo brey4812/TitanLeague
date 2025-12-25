@@ -46,7 +46,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
         supabase.from('matches').select('*').eq('session_id', sessionId).order('round', { ascending: true }),
         supabase.from('match_events').select('*').eq('session_id', sessionId),
-        // CORRECCIÓN: Nombre exacto de columna 'season_number'
+        // CORRECCIÓN: Nombre exacto de columna 'season_number' según la base de datos
         supabase.from('seasons').select('season_number').eq('is_active', true).maybeSingle()
       ]);
 
@@ -62,6 +62,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
+  // Persistir equipos locales cuando cambien
+  useEffect(() => {
+    if (isLoaded && teams.length > 0) {
+      localStorage.setItem('league_active_teams', JSON.stringify(teams));
+    }
+  }, [teams, isLoaded]);
+
+  // --- MOTOR IDA Y VUELTA (ALGORITMO DE BERGER COMPLETO) ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId) return;
 
@@ -85,7 +93,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const isSecondVuelta = targetWeek > roundsPerVuelta;
       const effectiveRound = isSecondVuelta ? targetWeek - roundsPerVuelta : targetWeek;
-      
       const fixed = scheduleTeams[0];
       const rest = scheduleTeams.slice(1);
       const rotationIndex = (effectiveRound - 1) % roundsPerVuelta;
@@ -112,15 +119,16 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         if (data) setMatches(prev => [...prev, ...data]);
       }
     }
-  }, [teams, matches, isLoaded, sessionId, currentSeason]);
+  }, [teams, matches, isLoaded, sessionId, currentSeason, divisions]);
 
   useEffect(() => { 
     const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 2000);
     return () => clearTimeout(timer);
   }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
+  // --- PROCESADO ESTADÍSTICAS + INTEGRACIÓN RATINGS ---
   const processedTeams = useMemo(() => {
-    // CORRECCIÓN: Guardia de carga para evitar Error #310
+    // GUARDIA: Evita el error de hidratación #310
     if (!isLoaded || teams.length === 0) return [];
 
     return teams.map(team => {
@@ -129,8 +137,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       
       teamMatches.forEach(m => {
         const isHome = String(m.home_team) === String(team.id);
-        const gFor = isHome ? m.home_goals : m.away_goals;
-        const gAg = isHome ? m.away_goals : m.home_goals;
+        const gFor = isHome ? Number(m.home_goals) : Number(m.away_goals);
+        const gAg = isHome ? Number(m.away_goals) : Number(m.home_goals);
         stats.goalsFor += gFor; stats.goalsAgainst += gAg;
         if (gFor > gAg) { stats.wins += 1; stats.points += 3; }
         else if (gFor === gAg) { stats.draws += 1; stats.points += 1; }
@@ -157,7 +165,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           stats: {
             ...player.stats,
             goals: pEvents.filter(e => e.type === 'GOAL').length,
-            // CORRECCIÓN: Normalización de nombres para TypeScript
+            // NORMALIZACIÓN: Reconocer asistencias por ID o por assist_name de la DB
             assists: matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name)).length,
             cards: {
               yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
@@ -189,10 +197,18 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getTeamById: (id) => processedTeams.find(t => String(t.id) === String(id)),
     getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
-    simulateMatchday: async () => { /* tu fetch a /api/simulate */ },
+    simulateMatchday: async () => {
+      const week = matches.find(m => !m.played)?.round || 1;
+      await fetch("/api/match/simulate-matchday", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ divisionId: 1, week, sessionId }),
+      });
+      await refreshData();
+    },
     getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({
       ...e,
-      // CORRECCIÓN: Normalización de nombres para el Dashboard
+      // NORMALIZACIÓN: Mapear nombres de base de datos a camelCase para TypeScript
       playerName: (e as any).player_name || e.playerName,
       assistName: (e as any).assist_name || e.assistName
     })),
@@ -211,7 +227,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     },
     getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
     drawTournament: async (n) => {}, 
-    resetLeagueData: async () => { if(confirm("¿Reset?")) { localStorage.clear(); window.location.reload(); } },
+    resetLeagueData: async () => { 
+        if(confirm("¿Reset?")) { 
+            await supabase.from('matches').delete().eq('session_id', sessionId); 
+            localStorage.clear(); 
+            window.location.reload(); 
+        } 
+    },
     importLeagueData: (newData) => { localStorage.setItem('league_active_teams', JSON.stringify(newData)); setTeams(newData); return true; },
     refreshData
   };
