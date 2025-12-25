@@ -42,16 +42,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshData = useCallback(async () => {
     try {
-      // PRIORIDAD LOCAL: Restauramos tus equipos buscados para que no desaparezcan
       const savedTeams = localStorage.getItem('league_active_teams');
-      if (savedTeams) {
-        setTeams(JSON.parse(savedTeams));
-      }
+      if (savedTeams) setTeams(JSON.parse(savedTeams));
       
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
         supabase.from('matches').select('*').eq('session_id', sessionId).order('round', { ascending: true }),
         supabase.from('match_events').select('*').eq('session_id', sessionId),
-        // Sincronización exacta con season_number
         supabase.from('seasons').select('season_number').eq('is_active', true).maybeSingle()
       ]);
 
@@ -67,7 +63,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
-  // Persistir equipos locales cuando cambien (para que se mantengan al recargar)
   useEffect(() => {
     if (isLoaded && teams.length > 0) {
       localStorage.setItem('league_active_teams', JSON.stringify(teams));
@@ -76,13 +71,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   const simulateMatchday = useCallback(async () => {
     try {
-      const weekToSimulate = matches.find(m => !m.played)?.round || 1;
+      const nextWeek = matches.find(m => !m.played)?.round || 1;
       setIsLoaded(false);
       await Promise.all(divisions.map(div => 
         fetch("/api/simulate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ divisionId: div.id, week: weekToSimulate, sessionId }),
+          body: JSON.stringify({ divisionId: div.id, week: nextWeek, sessionId }),
         })
       ));
       await refreshData();
@@ -97,42 +92,25 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (!isLoaded || teams.length < 2 || !sessionId) return;
 
     for (const div of divisions) {
-      // Filtrar equipos locales por su division_id asignado
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
+
+      const divMatches = matches.filter(m => Number(m.division_id) === div.id && (Number(m.season) || 1) === currentSeason);
+      if (divMatches.length > 0) continue;
 
       let scheduleTeams = [...divTeams].sort((a, b) => String(a.id).localeCompare(String(b.id)));
       if (scheduleTeams.length % 2 !== 0) scheduleTeams.push({ id: "ghost", name: "Descanso" } as any);
 
       const n = scheduleTeams.length;
-      const roundsPerVuelta = n - 1;
-      const divMatches = matches.filter(m => Number(m.division_id) === div.id && (Number(m.season) || 1) === currentSeason);
-      const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round || 0))) : 0;
-      const isRoundFinished = divMatches.length > 0 && divMatches.every(m => m.round !== lastRound || m.played);
-      const targetWeek = (divMatches.length === 0) ? 1 : (isRoundFinished ? lastRound + 1 : lastRound);
-
-      if (targetWeek > roundsPerVuelta * 2 || divMatches.some(m => Number(m.round) === targetWeek)) continue;
-
-      const isSecondVuelta = targetWeek > roundsPerVuelta;
-      const effectiveRound = isSecondVuelta ? targetWeek - roundsPerVuelta : targetWeek;
-      const fixed = scheduleTeams[0];
-      const rest = scheduleTeams.slice(1);
-      const rotationIndex = (effectiveRound - 1) % roundsPerVuelta;
-      for (let i = 0; i < rotationIndex; i++) rest.unshift(rest.pop()!);
-      const currentRound = [fixed, ...rest];
-
       const matchesToCreate = [];
       for (let i = 0; i < n / 2; i++) {
-        const teamA = currentRound[i];
-        const teamB = currentRound[n - 1 - i];
+        const teamA = scheduleTeams[i];
+        const teamB = scheduleTeams[n - 1 - i];
         if (teamA.id === "ghost" || teamB.id === "ghost") continue;
-        const shouldInvert = (i % 2 === 0 && !isSecondVuelta) || (i % 2 !== 0 && isSecondVuelta);
         
         matchesToCreate.push({
-          home_team: shouldInvert ? teamB.id : teamA.id,
-          away_team: shouldInvert ? teamA.id : teamB.id,
-          round: targetWeek, played: false, division_id: div.id, 
-          competition: "League", session_id: sessionId, season: currentSeason 
+          home_team: teamA.id, away_team: teamB.id, round: 1, played: false, 
+          division_id: div.id, competition: "League", session_id: sessionId, season: currentSeason 
         });
       }
 
@@ -141,15 +119,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         if (data) setMatches(prev => [...prev, ...data]);
       }
     }
-  }, [teams, matches, isLoaded, sessionId, currentSeason, divisions]);
+  }, [teams, matches, isLoaded, sessionId, currentSeason]);
 
   useEffect(() => { 
-    const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 1500);
+    const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 2000);
     return () => clearTimeout(timer);
   }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
   const processedTeams = useMemo(() => {
-    // Blindaje contra Error #310
     if (!isLoaded || teams.length === 0) return [];
 
     return teams.map(team => {
@@ -166,15 +143,23 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         else { stats.losses += 1; }
       });
 
-      // Procesar estadísticas de jugadores basadas en eventos de simulación
       const updatedRoster = (team.roster || []).map(player => {
         const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
+        
+        // Cálculo de porterías a cero
+        const cleanSheets = teamMatches.filter(m => {
+          const isHome = String(m.home_team) === String(team.id);
+          return (isHome ? m.away_goals : m.home_goals) === 0;
+        }).length;
+
         return {
           ...player,
           stats: {
             ...player.stats,
             goals: pEvents.filter(e => e.type === 'GOAL').length,
-            assists: pEvents.filter(e => e.type === 'ASSIST').length,
+            // Soporte para assist_name de la DB
+            assists: matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name)).length,
+            cleanSheets: (player.position === 'Goalkeeper' || player.position === 'Defender') ? cleanSheets : 0,
             cards: {
               yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
               red: pEvents.filter(e => e.type === 'RED_CARD').length
@@ -206,7 +191,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
     simulateMatchday,
-    getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)),
+    // Normalización de propiedades para el Dashboard
+    getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({
+      ...e,
+      playerName: (e as any).player_name || e.playerName,
+      assistName: (e as any).assist_name || e.assistName,
+      playerOutName: (e as any).player_out_name || e.playerOutName
+    })),
     getTeamOfTheWeek: (w) => [], 
     getBestEleven: (type, val) => [], 
     lastPlayedWeek: matches.filter(m => m.played && (Number(m.season) || 1) === currentSeason).length === 0 ? 1 : Math.max(...matches.filter(m => m.played).map(m => Number(m.round || 0))),
