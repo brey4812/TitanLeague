@@ -105,7 +105,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  // --- MOTOR DE GENERACIÓN DINÁMICO ---
+  // --- MOTOR DE GENERACIÓN DINÁMICO REPARADO (GENERACIÓN MASIVA) ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId || !currentSeasonId) return;
 
@@ -113,6 +113,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
+      // Sincronizar Standings
       const { data: standings } = await supabase.from('standings').select('team_id').eq('season_id', currentSeasonId);
       const toReg = divTeams.filter(dt => !standings?.some(s => Number(s.team_id) === Number(dt.id)));
       if (toReg.length > 0) {
@@ -122,39 +123,52 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const targetRound = 1;
-      const teamsWithMatch = new Set(matches.filter(m => m.round === targetRound && String(m.season_id) === String(currentSeasonId) && m.division_id === div.id).flatMap(m => [String(m.home_team), String(m.away_team)]));
+      // Corregido: Filtrar solo equipos que NO tengan partido en esta temporada/jornada
+      const teamsWithMatch = new Set(
+        matches
+          .filter(m => m.round === targetRound && String(m.season_id) === String(currentSeasonId) && m.division_id === div.id)
+          .flatMap(m => [String(m.home_team), String(m.away_team)])
+      );
+      
       const available = divTeams.filter(t => !teamsWithMatch.has(String(t.id)));
 
-      if (available.length < 2) continue;
-
-      const toCreate = [];
-      for (let i = 0; i < available.length; i += 2) {
-        if (i + 1 < available.length) {
-          toCreate.push({
-            home_team: Number(available[i].id), away_team: Number(available[i + 1].id),
-            round: targetRound, played: false, division_id: div.id,
-            competition: "League", session_id: sessionId, season_id: currentSeasonId 
-          });
+      // Generación masiva: emparejar a todos los libres disponibles
+      if (available.length >= 2) {
+        const toCreate = [];
+        for (let i = 0; i < available.length; i += 2) {
+          if (i + 1 < available.length) {
+            toCreate.push({
+              home_team: Number(available[i].id),
+              away_team: Number(available[i + 1].id),
+              round: targetRound,
+              played: false,
+              division_id: div.id,
+              competition: "League",
+              session_id: sessionId,
+              season_id: currentSeasonId 
+            });
+          }
         }
-      }
-      if (toCreate.length > 0) {
-        const { data } = await supabase.from('matches').insert(toCreate).select();
-        if (data) setMatches(prev => [...prev, ...data]);
+
+        if (toCreate.length > 0) {
+          const { data, error } = await supabase.from('matches').insert(toCreate).select();
+          if (error) console.error("Error insertando partidos masivos:", error.message);
+          if (data) setMatches(prev => [...prev, ...data]);
+        }
       }
     }
   }, [teams, matches, isLoaded, sessionId, currentSeasonId, divisions]);
 
   useEffect(() => { 
-    const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 2000);
+    const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 1500);
     return () => clearTimeout(timer);
   }, [teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESADO DE EQUIPOS (BLINDAJE DE STATS) ---
+  // --- PROCESADO DE EQUIPOS (BLINDAJE DE STATS Y RATINGS) ---
   const processedTeams = useMemo(() => {
     if (!isLoaded || teams.length === 0) return [];
     
     return teams.map(team => {
-      // 1. Inicializar objeto de estadísticas base para evitar undefined en la UI
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
       
       const teamMatches = matches.filter(m => 
@@ -174,7 +188,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       });
 
       const updatedRoster = (team.roster || []).map(player => {
-        // Inicializar objeto stats del jugador para seguridad
         const playerStats = player.stats || { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 };
         const ratings: number[] = [];
         
@@ -260,7 +273,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
     drawTournament: async (n) => {
         console.log("Sorteando torneo:", n);
-        // Lógica futura para rellenar con externos
     }, 
     resetLeagueData: async () => { if(confirm("¿Resetear?")) { await supabase.from('matches').delete().eq('session_id', sessionId); localStorage.clear(); window.location.reload(); } },
     importLeagueData: (newData) => { localStorage.setItem('league_active_teams', JSON.stringify(newData)); setTeams(newData); return true; },
