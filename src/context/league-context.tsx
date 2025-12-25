@@ -3,7 +3,7 @@
 import { createContext, useState, ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Team, Player, MatchResult, Division, LeagueContextType, TeamOfTheWeekPlayer, MatchEvent } from "@/lib/types";
-import { calculatePlayerRating } from "@/lib/calculatePlayerRating"; // Importamos tu lógica
+import { calculatePlayerRating } from "@/lib/calculatePlayerRating";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,6 +46,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
         supabase.from('matches').select('*').eq('session_id', sessionId).order('round', { ascending: true }),
         supabase.from('match_events').select('*').eq('session_id', sessionId),
+        // CORRECCIÓN: Nombre exacto de columna 'season_number'
         supabase.from('seasons').select('season_number').eq('is_active', true).maybeSingle()
       ]);
 
@@ -61,7 +62,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
-  // --- MOTOR IDA Y VUELTA (ALGORITMO DE BERGER COMPLETO) ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId) return;
 
@@ -74,12 +74,11 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const n = scheduleTeams.length;
       const roundsPerVuelta = n - 1;
-      const totalRounds = roundsPerVuelta * 2; // Formato Ida y Vuelta
+      const totalRounds = roundsPerVuelta * 2;
       
       const divMatches = matches.filter(m => Number(m.division_id) === div.id && (Number(m.season) || 1) === currentSeason);
       const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round || 0))) : 0;
       const isRoundFinished = divMatches.length > 0 && divMatches.every(m => m.round !== lastRound || m.played);
-
       const targetWeek = (divMatches.length === 0) ? 1 : (isRoundFinished ? lastRound + 1 : lastRound);
 
       if (targetWeek > totalRounds || divMatches.some(m => Number(m.round) === targetWeek)) continue;
@@ -98,8 +97,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         const teamA = currentRound[i];
         const teamB = currentRound[n - 1 - i];
         if (teamA.id === "ghost" || teamB.id === "ghost") continue;
-
-        // Alternancia de campo: En la segunda vuelta se invierte el local
         const shouldInvert = (i % 2 === 0 && !isSecondVuelta) || (i % 2 !== 0 && isSecondVuelta);
         
         matchesToCreate.push({
@@ -122,8 +119,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(timer);
   }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESADO ESTADÍSTICAS + INTEGRACIÓN RATINGS ---
   const processedTeams = useMemo(() => {
+    // CORRECCIÓN: Guardia de carga para evitar Error #310
     if (!isLoaded || teams.length === 0) return [];
 
     return teams.map(team => {
@@ -142,16 +139,11 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const updatedRoster = (team.roster || []).map(player => {
         const playerMatchRatings: number[] = [];
-        
-        // Obtenemos eventos por partido para calcular el rating de cada uno
         teamMatches.forEach(match => {
           const eventsInMatch = matchEvents.filter(e => String(e.match_id) === String(match.id));
           const isHome = String(match.home_team) === String(team.id);
           const cleanSheet = (isHome ? match.away_goals : match.home_goals) === 0;
-          
-          // Aplicamos tu archivo lib/calculatePlayerRating.ts
-          const rating = calculatePlayerRating(player, eventsInMatch, cleanSheet);
-          playerMatchRatings.push(rating);
+          playerMatchRatings.push(calculatePlayerRating(player, eventsInMatch, cleanSheet));
         });
 
         const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
@@ -161,10 +153,11 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
         return {
           ...player,
-          rating: avgRating, // Media de todas las valoraciones de la temporada
+          rating: avgRating,
           stats: {
             ...player.stats,
             goals: pEvents.filter(e => e.type === 'GOAL').length,
+            // CORRECCIÓN: Normalización de nombres para TypeScript
             assists: matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name)).length,
             cards: {
               yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
@@ -199,16 +192,15 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     simulateMatchday: async () => { /* tu fetch a /api/simulate */ },
     getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({
       ...e,
+      // CORRECCIÓN: Normalización de nombres para el Dashboard
       playerName: (e as any).player_name || e.playerName,
       assistName: (e as any).assist_name || e.assistName
     })),
     getTeamOfTheWeek: (w) => {
-        // Lógica simple para el ONCE DE LA JORNADA basada en los nuevos ratings calculados
         const weekMatchIds = matches.filter(m => Number(m.round) === w && m.played).map(m => String(m.id));
-        const candidates = processedTeams.flatMap(t => t.roster || []).filter(p => {
-            const hasPlayed = matchEvents.some(e => weekMatchIds.includes(String(e.match_id)) && String(e.player_id) === String(p.id));
-            return hasPlayed;
-        });
+        const candidates = processedTeams.flatMap(t => t.roster || []).filter(p => 
+            matchEvents.some(e => weekMatchIds.includes(String(e.match_id)) && String(e.player_id) === String(p.id))
+        );
         return candidates.sort((a,b) => b.rating - a.rating).slice(0, 11) as any;
     },
     getBestEleven: (t, v) => [],

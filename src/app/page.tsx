@@ -37,7 +37,7 @@ export default function DashboardPage() {
   const isSeasonFinished = useMemo(() => {
     if (!isLoaded || !safeMatches.length) return false;
 
-    // Filtramos partidos usando la propiedad season vinculada a la DB
+    // Filtramos partidos usando la propiedad season
     const currentSeasonMatches = safeMatches.filter(
       (m) => Number(m.season || 1) === currentSeasonNum
     );
@@ -161,6 +161,7 @@ export default function DashboardPage() {
 
             <CardContent className="py-6 max-h-[400px] overflow-y-auto">
               <div className="space-y-3">
+                {/* getMatchEvents ya devuelve los nombres normalizados desde el context */}
                 {getMatchEvents(selectedMatch.id).length > 0 ? (
                   getMatchEvents(selectedMatch.id).map((event) => {
                     const isHome = String(event.team_id) === String(selectedMatch.home_team);
@@ -172,7 +173,6 @@ export default function DashboardPage() {
                       >
                         <span className="font-bold text-orange-500 text-sm">{event.minute}'</span>
                         <div className={`flex flex-col ${isHome ? "items-start" : "items-end"}`}>
-                          {/* CORRECCIÓN: Usar playerName y assistName según types.ts */}
                           <span className="text-sm font-black">{event.playerName}</span>
                           <span className="text-[10px] uppercase text-slate-400">
                             {event.type.replace('_', ' ')}
