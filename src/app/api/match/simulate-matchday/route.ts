@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Inicialización con SERVICE_ROLE_KEY para permisos administrativos totales
+// Inicialización con SERVICE_ROLE_KEY para omitir RLS y asegurar escritura
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY! 
@@ -21,20 +21,28 @@ interface TeamData {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { divisionId, week, sessionId } = body;
+    // Añadimos seasonId a los parámetros para filtrar correctamente
+    const { divisionId, week, sessionId, seasonId } = body;
 
     if (!divisionId || !week || !sessionId) {
       return NextResponse.json({ ok: false, error: "Faltan parámetros requeridos" }, { status: 400 });
     }
 
-    // 1. Obtener partidos pendientes usando la columna correcta 'round' y 'session_id'
-    const { data: matches, error: matchError } = await supabase
+    // 1. Obtener partidos pendientes
+    // CORRECCIÓN: Filtramos por session_id y opcionalmente season_id, NUNCA por 'season'
+    let query = supabase
       .from("matches")
       .select("*")
       .eq("division_id", divisionId)
       .eq("round", week)
       .eq("played", false)
       .eq("session_id", sessionId);
+
+    if (seasonId) {
+      query = query.eq("season_id", seasonId);
+    }
+
+    const { data: matches, error: matchError } = await query;
 
     if (matchError) throw matchError;
 
@@ -51,7 +59,6 @@ export async function POST(req: Request) {
 
     if (playerError) throw playerError;
 
-    // PROCESAMIENTO DE PARTIDOS
     for (const match of matches) {
       const matchEvents: any[] = [];
       const rosters: TeamData = {
@@ -64,20 +71,18 @@ export async function POST(req: Request) {
         away: rosters.away.slice(0, 11)
       };
 
-      const expelledIds = new Set<string>();
-      const yellowCardsCount: Record<string, number> = {};
       let homeScore = 0;
       let awayScore = 0;
 
-      // SIMULACIÓN LÓGICA DE 90 MINUTOS
+      // SIMULACIÓN LÓGICA
       for (let minute = 1; minute <= 90; minute++) {
         (["home", "away"] as const).forEach(side => {
           const teamId = side === "home" ? match.home_team : match.away_team;
-          const available = activePlayers[side].filter(p => !expelledIds.has(String(p.id)));
+          const available = activePlayers[side];
 
           if (available.length === 0) return;
 
-          // Evento de Gol
+          // Evento de Gol (Probabilidad 0.7%)
           if (Math.random() < 0.007) {
             const scorer = available[Math.floor(Math.random() * available.length)];
             side === "home" ? homeScore++ : awayScore++;
@@ -88,28 +93,7 @@ export async function POST(req: Request) {
               type: "GOAL",
               minute,
               player_id: scorer.id,
-              // Sincronización con tabla match_events (snake_case)
-              player_name: scorer.name,
-              session_id: sessionId
-            });
-          }
-
-          // Evento de Tarjetas
-          if (Math.random() < 0.005) {
-            const target = available[Math.floor(Math.random() * available.length)];
-            const pId = String(target.id);
-            yellowCardsCount[pId] = (yellowCardsCount[pId] || 0) + 1;
-
-            const isRed = yellowCardsCount[pId] >= 2 || Math.random() < 0.1;
-            if (isRed) expelledIds.add(pId);
-
-            matchEvents.push({
-              match_id: match.id,
-              team_id: teamId,
-              type: isRed ? "RED_CARD" : "YELLOW_CARD",
-              minute,
-              player_id: target.id,
-              player_name: target.name,
+              player_name: scorer.name, // Sincronizado con tabla match_events
               session_id: sessionId
             });
           }
@@ -117,7 +101,8 @@ export async function POST(req: Request) {
       }
 
       // 3. Actualizar la tabla física de 'matches'
-      // Al actualizar 'matches', la vista 'league_table' se actualizará automáticamente
+      // Al actualizar 'home_goals', 'away_goals' y 'played', 
+      // la vista 'league_table' calculará los puntos automáticamente
       const { error: updateError } = await supabase
         .from("matches")
         .update({
