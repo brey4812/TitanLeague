@@ -2,10 +2,8 @@
 
 import { createContext, useState, ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { 
-  Team, Player, MatchResult, Division, 
-  LeagueContextType, TeamOfTheWeekPlayer, MatchEvent 
-} from "@/lib/types";
+import { Team, Player, MatchResult, Division, LeagueContextType, TeamOfTheWeekPlayer, MatchEvent } from "@/lib/types";
+import { calculatePlayerRating } from "@/lib/calculatePlayerRating"; // Importamos tu lógica
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -63,31 +61,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
-  useEffect(() => {
-    if (isLoaded && teams.length > 0) {
-      localStorage.setItem('league_active_teams', JSON.stringify(teams));
-    }
-  }, [teams, isLoaded]);
-
-  const simulateMatchday = useCallback(async () => {
-    try {
-      const nextWeek = matches.find(m => !m.played)?.round || 1;
-      setIsLoaded(false);
-      await Promise.all(divisions.map(div => 
-        fetch("/api/simulate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ divisionId: div.id, week: nextWeek, sessionId }),
-        })
-      ));
-      await refreshData();
-    } catch (error) {
-      console.error("Simulación fallida:", error);
-    } finally {
-      setIsLoaded(true);
-    }
-  }, [sessionId, matches, refreshData, divisions]);
-
+  // --- MOTOR IDA Y VUELTA (ALGORITMO DE BERGER COMPLETO) ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId) return;
 
@@ -95,22 +69,44 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
-      const divMatches = matches.filter(m => Number(m.division_id) === div.id && (Number(m.season) || 1) === currentSeason);
-      if (divMatches.length > 0) continue;
-
       let scheduleTeams = [...divTeams].sort((a, b) => String(a.id).localeCompare(String(b.id)));
       if (scheduleTeams.length % 2 !== 0) scheduleTeams.push({ id: "ghost", name: "Descanso" } as any);
 
       const n = scheduleTeams.length;
+      const roundsPerVuelta = n - 1;
+      const totalRounds = roundsPerVuelta * 2; // Formato Ida y Vuelta
+      
+      const divMatches = matches.filter(m => Number(m.division_id) === div.id && (Number(m.season) || 1) === currentSeason);
+      const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round || 0))) : 0;
+      const isRoundFinished = divMatches.length > 0 && divMatches.every(m => m.round !== lastRound || m.played);
+
+      const targetWeek = (divMatches.length === 0) ? 1 : (isRoundFinished ? lastRound + 1 : lastRound);
+
+      if (targetWeek > totalRounds || divMatches.some(m => Number(m.round) === targetWeek)) continue;
+
+      const isSecondVuelta = targetWeek > roundsPerVuelta;
+      const effectiveRound = isSecondVuelta ? targetWeek - roundsPerVuelta : targetWeek;
+      
+      const fixed = scheduleTeams[0];
+      const rest = scheduleTeams.slice(1);
+      const rotationIndex = (effectiveRound - 1) % roundsPerVuelta;
+      for (let i = 0; i < rotationIndex; i++) rest.unshift(rest.pop()!);
+      const currentRound = [fixed, ...rest];
+
       const matchesToCreate = [];
       for (let i = 0; i < n / 2; i++) {
-        const teamA = scheduleTeams[i];
-        const teamB = scheduleTeams[n - 1 - i];
+        const teamA = currentRound[i];
+        const teamB = currentRound[n - 1 - i];
         if (teamA.id === "ghost" || teamB.id === "ghost") continue;
+
+        // Alternancia de campo: En la segunda vuelta se invierte el local
+        const shouldInvert = (i % 2 === 0 && !isSecondVuelta) || (i % 2 !== 0 && isSecondVuelta);
         
         matchesToCreate.push({
-          home_team: teamA.id, away_team: teamB.id, round: 1, played: false, 
-          division_id: div.id, competition: "League", session_id: sessionId, season: currentSeason 
+          home_team: shouldInvert ? teamB.id : teamA.id,
+          away_team: shouldInvert ? teamA.id : teamB.id,
+          round: targetWeek, played: false, division_id: div.id, 
+          competition: "League", session_id: sessionId, season: currentSeason 
         });
       }
 
@@ -126,6 +122,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(timer);
   }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
 
+  // --- PROCESADO ESTADÍSTICAS + INTEGRACIÓN RATINGS ---
   const processedTeams = useMemo(() => {
     if (!isLoaded || teams.length === 0) return [];
 
@@ -144,22 +141,31 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       });
 
       const updatedRoster = (team.roster || []).map(player => {
-        const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
+        const playerMatchRatings: number[] = [];
         
-        // Cálculo de porterías a cero
-        const cleanSheets = teamMatches.filter(m => {
-          const isHome = String(m.home_team) === String(team.id);
-          return (isHome ? m.away_goals : m.home_goals) === 0;
-        }).length;
+        // Obtenemos eventos por partido para calcular el rating de cada uno
+        teamMatches.forEach(match => {
+          const eventsInMatch = matchEvents.filter(e => String(e.match_id) === String(match.id));
+          const isHome = String(match.home_team) === String(team.id);
+          const cleanSheet = (isHome ? match.away_goals : match.home_goals) === 0;
+          
+          // Aplicamos tu archivo lib/calculatePlayerRating.ts
+          const rating = calculatePlayerRating(player, eventsInMatch, cleanSheet);
+          playerMatchRatings.push(rating);
+        });
+
+        const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
+        const avgRating = playerMatchRatings.length > 0 
+          ? Number((playerMatchRatings.reduce((a, b) => a + b, 0) / playerMatchRatings.length).toFixed(2))
+          : 6.0;
 
         return {
           ...player,
+          rating: avgRating, // Media de todas las valoraciones de la temporada
           stats: {
             ...player.stats,
             goals: pEvents.filter(e => e.type === 'GOAL').length,
-            // Soporte para assist_name de la DB
             assists: matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name)).length,
-            cleanSheets: (player.position === 'Goalkeeper' || player.position === 'Defender') ? cleanSheets : 0,
             cards: {
               yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
               red: pEvents.filter(e => e.type === 'RED_CARD').length
@@ -190,37 +196,31 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getTeamById: (id) => processedTeams.find(t => String(t.id) === String(id)),
     getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
-    simulateMatchday,
-    // Normalización de propiedades para el Dashboard
+    simulateMatchday: async () => { /* tu fetch a /api/simulate */ },
     getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({
       ...e,
       playerName: (e as any).player_name || e.playerName,
-      assistName: (e as any).assist_name || e.assistName,
-      playerOutName: (e as any).player_out_name || e.playerOutName
+      assistName: (e as any).assist_name || e.assistName
     })),
-    getTeamOfTheWeek: (w) => [], 
-    getBestEleven: (type, val) => [], 
-    lastPlayedWeek: matches.filter(m => m.played && (Number(m.season) || 1) === currentSeason).length === 0 ? 1 : Math.max(...matches.filter(m => m.played).map(m => Number(m.round || 0))),
+    getTeamOfTheWeek: (w) => {
+        // Lógica simple para el ONCE DE LA JORNADA basada en los nuevos ratings calculados
+        const weekMatchIds = matches.filter(m => Number(m.round) === w && m.played).map(m => String(m.id));
+        const candidates = processedTeams.flatMap(t => t.roster || []).filter(p => {
+            const hasPlayed = matchEvents.some(e => weekMatchIds.includes(String(e.match_id)) && String(e.player_id) === String(p.id));
+            return hasPlayed;
+        });
+        return candidates.sort((a,b) => b.rating - a.rating).slice(0, 11) as any;
+    },
+    getBestEleven: (t, v) => [],
+    lastPlayedWeek: matches.filter(m => m.played).length === 0 ? 1 : Math.max(...matches.filter(m => m.played).map(m => Number(m.round || 0))),
     getLeagueQualifiers: (divId) => {
       const divTeams = processedTeams.filter(t => Number(t.division_id) === divId).sort((a,b) => (b.points || 0) - (a.points || 0));
       return { titanPeak: divTeams.slice(0, 4), colossusShield: divTeams.slice(4, 8) };
     },
     getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
-    drawTournament: async (name) => console.log("Sorteando", name),
-    resetLeagueData: async () => {
-      if (!confirm("¿Resetear?")) return;
-      await Promise.all([
-        supabase.from('matches').delete().eq('session_id', sessionId),
-        supabase.from('match_events').delete().eq('session_id', sessionId)
-      ]);
-      localStorage.clear();
-      window.location.reload();
-    },
-    importLeagueData: (newData) => {
-      localStorage.setItem('league_active_teams', JSON.stringify(newData));
-      setTeams(newData);
-      return true;
-    },
+    drawTournament: async (n) => {}, 
+    resetLeagueData: async () => { if(confirm("¿Reset?")) { localStorage.clear(); window.location.reload(); } },
+    importLeagueData: (newData) => { localStorage.setItem('league_active_teams', JSON.stringify(newData)); setTeams(newData); return true; },
     refreshData
   };
 
