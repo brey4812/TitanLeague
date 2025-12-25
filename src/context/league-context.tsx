@@ -2,7 +2,7 @@
 
 import { createContext, useState, ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Team, Player, MatchResult, Division, LeagueContextType, TeamOfTheWeekPlayer, MatchEvent } from "@/lib/types";
+import { Team, Player, MatchResult, Division, LeagueContextType, MatchEvent } from "@/lib/types";
 import { calculatePlayerRating } from "@/lib/calculatePlayerRating";
 
 const supabase = createClient(
@@ -74,6 +74,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   // --- GENERADOR DE PARTIDOS (ARREGLA TABLA VACÍA) ---
   const autoMatchmaker = useCallback(async () => {
+    // Si no hay temporada activa en DB, no podemos generar partidos con relación season_id
     if (!isLoaded || teams.length < 2 || !sessionId || !currentSeasonId) return;
 
     for (const div of divisions) {
@@ -82,7 +83,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       // Verificar si ya existen partidos para esta división y temporada en la DB
       const existingMatches = matches.filter(m => 
-        Number(m.division_id) === div.id && m.season_id === currentSeasonId
+        Number(m.division_id) === div.id && (m.season_id === currentSeasonId || Number(m.season) === currentSeason)
       );
 
       if (existingMatches.length > 0) continue;
@@ -92,10 +93,9 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       if (scheduleTeams.length % 2 !== 0) scheduleTeams.push({ id: "ghost", name: "Descanso" } as any);
 
       const n = scheduleTeams.length;
-      const roundsPerVuelta = n - 1;
       const matchesToCreate = [];
 
-      // Generar Jornada 1 para iniciar
+      // Generar Jornada 1 para iniciar el sistema
       const fixed = scheduleTeams[0];
       const rest = scheduleTeams.slice(1);
       const currentRound = [fixed, ...rest];
@@ -106,20 +106,21 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         if (teamA.id === "ghost" || teamB.id === "ghost") continue;
 
         matchesToCreate.push({
-          home_team: teamA.id,
-          away_team: teamB.id,
+          home_team: Number(teamA.id), // Asegurar int4 para DB
+          away_team: Number(teamB.id), // Asegurar int4 para DB
           round: 1,
           played: false,
           division_id: div.id,
           competition: "League",
           session_id: sessionId,
           // Sincronización con columnas de DB
-          season_id: currentSeasonId,
+          season_id: currentSeasonId, 
           season: currentSeason 
         });
       }
 
       if (matchesToCreate.length > 0) {
+        console.log(`Generando ${matchesToCreate.length} partidos para la división ${div.id}`);
         const { data, error } = await supabase.from('matches').insert(matchesToCreate).select();
         if (error) console.error("Error al generar partidos:", error);
         if (data) setMatches(prev => [...prev, ...data]);
@@ -134,12 +135,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   // --- PROCESADO ESTADÍSTICAS + RATINGS ---
   const processedTeams = useMemo(() => {
-    // GUARDIA: Evita error #310
+    // GUARDIA: Evita error de hidratación #310
     if (!isLoaded || teams.length === 0) return [];
 
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
-      const teamMatches = matches.filter(m => m.played && (m.season_id === currentSeasonId) && (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id)));
+      const teamMatches = matches.filter(m => m.played && (m.season_id === currentSeasonId || Number(m.season) === currentSeason) && (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id)));
       
       teamMatches.forEach(m => {
         const isHome = String(m.home_team) === String(team.id);
@@ -156,7 +157,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         teamMatches.forEach(match => {
           const eventsInMatch = matchEvents.filter(e => String(e.match_id) === String(match.id));
           const isHome = String(match.home_team) === String(team.id);
-          const cleanSheet = (isHome ? match.away_goals : match.home_goals) === 0;
+          const cleanSheet = (isHome ? Number(match.away_goals) : Number(match.home_goals)) === 0;
           playerMatchRatings.push(calculatePlayerRating(player, eventsInMatch, cleanSheet));
         });
 

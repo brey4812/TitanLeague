@@ -62,7 +62,7 @@ export async function POST(req: Request) {
         away: allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || []
       };
 
-      // Selección de los 11 activos (simulación simple)
+      // Selección de los 11 activos (simulación simple de los primeros disponibles)
       const activePlayers: TeamData = {
         home: rosters.home.slice(0, 11),
         away: rosters.away.slice(0, 11)
