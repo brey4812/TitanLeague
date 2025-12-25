@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Usamos el SERVICE_ROLE_KEY para asegurar permisos de escritura en la DB
+// Inicialización con SERVICE_ROLE_KEY para permisos de escritura administrativa
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY! 
@@ -23,11 +23,12 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { divisionId, week, sessionId } = body;
 
+    // Validación de parámetros de entrada
     if (!divisionId || !week || !sessionId) {
-      return NextResponse.json({ ok: false, error: "Faltan parámetros" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Faltan parámetros requeridos" }, { status: 400 });
     }
 
-    // 1. Obtener partidos pendientes
+    // 1. Obtener partidos pendientes para la jornada y sesión específica
     const { data: matches, error: matchError } = await supabase
       .from("matches")
       .select("*")
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
     if (matchError) throw matchError;
 
     if (!matches || matches.length === 0) {
-      return NextResponse.json({ ok: true, message: "No hay partidos para simular" });
+      return NextResponse.json({ ok: true, message: "No hay partidos pendientes para simular" });
     }
 
     // 2. Obtener jugadores de los equipos involucrados
@@ -51,13 +52,17 @@ export async function POST(req: Request) {
 
     if (playerError) throw playerError;
 
+    // --- PROCESAMIENTO DE CADA PARTIDO ---
     for (const match of matches) {
       const matchEvents: any[] = [];
+      
+      // Separación de plantillas por equipo
       const rosters: TeamData = {
         home: allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [],
         away: allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || []
       };
 
+      // Selección de los 11 activos (simulación simple)
       const activePlayers: TeamData = {
         home: rosters.home.slice(0, 11),
         away: rosters.away.slice(0, 11)
@@ -76,7 +81,7 @@ export async function POST(req: Request) {
 
           if (available.length === 0) return;
 
-          // Evento de Gol
+          // --- EVENTO DE GOL ---
           if (Math.random() < 0.007) {
             const scorer = available[Math.floor(Math.random() * available.length)];
             const assistant = available.length > 1 && Math.random() < 0.7
@@ -91,14 +96,14 @@ export async function POST(req: Request) {
               type: "GOAL",
               minute,
               player_id: scorer.id,
-              // Sincronización con nombres de columna de la DB
+              // Sincronización con columnas snake_case de Supabase
               player_name: scorer.name,
               assist_name: assistant?.name || null,
               session_id: sessionId
             });
           }
 
-          // Evento de Tarjetas
+          // --- EVENTO DE TARJETAS ---
           if (Math.random() < 0.005) {
             const target = available[Math.floor(Math.random() * available.length)];
             const pId = String(target.id);
@@ -120,8 +125,8 @@ export async function POST(req: Request) {
         });
       }
 
-      // 3. Actualizar el partido en Supabase
-      await supabase
+      // 3. Actualizar el resultado del partido en Supabase
+      const { error: updateError } = await supabase
         .from("matches")
         .update({
           home_goals: homeScore,
@@ -130,13 +135,16 @@ export async function POST(req: Request) {
         })
         .eq("id", match.id);
 
-      // 4. Insertar eventos generados
+      if (updateError) console.error(`Error actualizando partido ${match.id}:`, updateError);
+
+      // 4. Inserción masiva de los eventos generados
       if (matchEvents.length > 0) {
-        await supabase.from("match_events").insert(matchEvents);
+        const { error: eventsError } = await supabase.from("match_events").insert(matchEvents);
+        if (eventsError) console.error(`Error insertando eventos del partido ${match.id}:`, eventsError);
       }
     }
 
-    return NextResponse.json({ ok: true, message: "Simulación completada con éxito" });
+    return NextResponse.json({ ok: true, message: "Simulación de jornada completada con éxito" });
   } catch (err: any) {
     console.error("SIM ERROR:", err);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });

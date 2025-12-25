@@ -18,6 +18,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   const [matchEvents, setMatchEvents] = useState<MatchEvent[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentSeason, setCurrentSeason] = useState(1);
+  const [currentSeasonId, setCurrentSeasonId] = useState<number | null>(null);
 
   const [sessionId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -46,11 +47,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
         supabase.from('matches').select('*').eq('session_id', sessionId).order('round', { ascending: true }),
         supabase.from('match_events').select('*').eq('session_id', sessionId),
-        // CORRECCIÓN: Nombre de columna 'season_number' según DB
-        supabase.from('seasons').select('season_number').eq('is_active', true).maybeSingle()
+        // Sincronización con columna 'season_number' de la DB
+        supabase.from('seasons').select('id, season_number').eq('is_active', true).maybeSingle()
       ]);
 
-      if (seasonRes.data) setCurrentSeason(Number(seasonRes.data.season_number) || 1);
+      if (seasonRes.data) {
+        setCurrentSeason(Number(seasonRes.data.season_number) || 1);
+        setCurrentSeasonId(seasonRes.data.id);
+      }
       if (matchesRes.data) setMatches(matchesRes.data);
       if (eventsRes.data) setMatchEvents(eventsRes.data);
     } catch (error) {
@@ -68,71 +72,74 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- MOTOR IDA Y VUELTA (ALGORITMO DE BERGER COMPLETO) ---
+  // --- GENERADOR DE PARTIDOS (ARREGLA TABLA VACÍA) ---
   const autoMatchmaker = useCallback(async () => {
-    if (!isLoaded || teams.length < 2 || !sessionId) return;
+    if (!isLoaded || teams.length < 2 || !sessionId || !currentSeasonId) return;
 
     for (const div of divisions) {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
+      // Verificar si ya existen partidos para esta división y temporada en la DB
+      const existingMatches = matches.filter(m => 
+        Number(m.division_id) === div.id && m.season_id === currentSeasonId
+      );
+
+      if (existingMatches.length > 0) continue;
+
+      // Algoritmo de Berger para Ida y Vuelta
       let scheduleTeams = [...divTeams].sort((a, b) => String(a.id).localeCompare(String(b.id)));
       if (scheduleTeams.length % 2 !== 0) scheduleTeams.push({ id: "ghost", name: "Descanso" } as any);
 
       const n = scheduleTeams.length;
       const roundsPerVuelta = n - 1;
-      const totalRounds = roundsPerVuelta * 2;
-      
-      const divMatches = matches.filter(m => Number(m.division_id) === div.id && (Number(m.season) || 1) === currentSeason);
-      const lastRound = divMatches.length > 0 ? Math.max(...divMatches.map(m => Number(m.round || 0))) : 0;
-      const isRoundFinished = divMatches.length > 0 && divMatches.every(m => m.round !== lastRound || m.played);
-      const targetWeek = (divMatches.length === 0) ? 1 : (isRoundFinished ? lastRound + 1 : lastRound);
+      const matchesToCreate = [];
 
-      if (targetWeek > totalRounds || divMatches.some(m => Number(m.round) === targetWeek)) continue;
-
-      const isSecondVuelta = targetWeek > roundsPerVuelta;
-      const effectiveRound = isSecondVuelta ? targetWeek - roundsPerVuelta : targetWeek;
+      // Generar Jornada 1 para iniciar
       const fixed = scheduleTeams[0];
       const rest = scheduleTeams.slice(1);
-      const rotationIndex = (effectiveRound - 1) % roundsPerVuelta;
-      for (let i = 0; i < rotationIndex; i++) rest.unshift(rest.pop()!);
       const currentRound = [fixed, ...rest];
 
-      const matchesToCreate = [];
       for (let i = 0; i < n / 2; i++) {
         const teamA = currentRound[i];
         const teamB = currentRound[n - 1 - i];
         if (teamA.id === "ghost" || teamB.id === "ghost") continue;
-        const shouldInvert = (i % 2 === 0 && !isSecondVuelta) || (i % 2 !== 0 && isSecondVuelta);
-        
+
         matchesToCreate.push({
-          home_team: shouldInvert ? teamB.id : teamA.id,
-          away_team: shouldInvert ? teamA.id : teamB.id,
-          round: targetWeek, played: false, division_id: div.id, 
-          competition: "League", session_id: sessionId, season: currentSeason 
+          home_team: teamA.id,
+          away_team: teamB.id,
+          round: 1,
+          played: false,
+          division_id: div.id,
+          competition: "League",
+          session_id: sessionId,
+          // Sincronización con columnas de DB
+          season_id: currentSeasonId,
+          season: currentSeason 
         });
       }
 
       if (matchesToCreate.length > 0) {
-        const { data } = await supabase.from('matches').insert(matchesToCreate).select();
+        const { data, error } = await supabase.from('matches').insert(matchesToCreate).select();
+        if (error) console.error("Error al generar partidos:", error);
         if (data) setMatches(prev => [...prev, ...data]);
       }
     }
-  }, [teams, matches, isLoaded, sessionId, currentSeason, divisions]);
+  }, [teams, matches, isLoaded, sessionId, currentSeason, currentSeasonId, divisions]);
 
   useEffect(() => { 
     const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 2000);
     return () => clearTimeout(timer);
-  }, [matches.length, teams.length, isLoaded, autoMatchmaker]);
+  }, [teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESADO ESTADÍSTICAS + INTEGRACIÓN RATINGS ---
+  // --- PROCESADO ESTADÍSTICAS + RATINGS ---
   const processedTeams = useMemo(() => {
     // GUARDIA: Evita error #310
     if (!isLoaded || teams.length === 0) return [];
 
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
-      const teamMatches = matches.filter(m => m.played && (Number(m.season) || 1) === currentSeason && (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id)));
+      const teamMatches = matches.filter(m => m.played && (m.season_id === currentSeasonId) && (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id)));
       
       teamMatches.forEach(m => {
         const isHome = String(m.home_team) === String(team.id);
@@ -164,7 +171,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           stats: {
             ...player.stats,
             goals: pEvents.filter(e => e.type === 'GOAL').length,
-            // NORMALIZACIÓN: Soporte para 'assist_name' de la DB
+            // NORMALIZACIÓN: Buscar asistencias por ID o nombre de DB
             assists: matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name)).length,
             cards: {
               yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
@@ -176,7 +183,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       return { ...team, stats, points: stats.points, roster: updatedRoster };
     });
-  }, [teams, matches, matchEvents, currentSeason, isLoaded]);
+  }, [teams, matches, matchEvents, currentSeason, currentSeasonId, isLoaded]);
 
   const value: LeagueContextType = {
     teams: processedTeams,
@@ -207,7 +214,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     },
     getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({
       ...e,
-      // NORMALIZACIÓN: Mapear nombres de DB a camelCase de TypeScript
+      // NORMALIZACIÓN: Traducir snake_case de DB a camelCase de TS
       playerName: (e as any).player_name || e.playerName,
       assistName: (e as any).assist_name || e.assistName,
       playerOutName: (e as any).player_out_name || e.playerOutName
