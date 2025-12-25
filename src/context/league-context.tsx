@@ -15,7 +15,6 @@ import {
   Division,
   LeagueContextType,
   MatchEvent,
-  Player,
 } from "@/lib/types";
 
 const supabase = createClient(
@@ -75,7 +74,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     refreshData();
   }, [refreshData]);
 
-  /* ===================== STATS + RATINGS ===================== */
+  /* ===================== STATS + RATING ===================== */
   const processedTeams = useMemo<Team[]>(() => {
     if (!isLoaded) return [];
 
@@ -113,14 +112,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         return {
           ...p,
           rating: Number(rating.toFixed(1)),
-          matchRatings: [
-            ...(p.matchRatings || []),
-            {
-              season: currentSeason,
-              week: teamMatches.length,
-              rating: Number(rating.toFixed(1)),
-            },
-          ],
           stats: {
             goals,
             assists,
@@ -176,7 +167,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     const expelled = new Set<string>();
 
     const randomPlayer = (team: Team) =>
-      team.roster![Math.floor(Math.random() * team.roster!.length)];
+      team.roster[Math.floor(Math.random() * team.roster.length)];
 
     const addGoal = (team: Team) => {
       const scorer = randomPlayer(team);

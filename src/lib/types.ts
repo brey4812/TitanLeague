@@ -11,14 +11,16 @@ export interface Player {
   country?: string;
   face_url?: string;
 
-  rating: number;
   team_id?: number | string;
 
-  /** ⭐ HISTORIAL DE VALORACIONES POR PARTIDO */
+  /** ⭐ MEDIA ACTUAL (calculada) */
+  rating: number;
+
+  /** ⭐ HISTORIAL DE VALORACIONES */
   matchRatings?: {
     season: number;
     week: number;
-    rating: number; // 1 a 10
+    rating: number; // 1–10
   }[];
 
   stats: {
@@ -39,25 +41,32 @@ export interface Team {
   id: number | string;
   name: string;
   country: string;
+
   logo?: string;
-  badge_url: string;
+  badge_url?: string;
+
+  real_team_name?: string;
+  league?: string;
+  external_id?: string;
+
   overall: number;
   attack: number;
   midfield: number;
   defense: number;
-  real_team_name: string;
-  league: string;
-  external_id: string;
+
   division_id: number;
   divisionName?: string;
-  stats: {
+
+  stats?: {
     wins: number;
     draws: number;
     losses: number;
     goalsFor: number;
     goalsAgainst: number;
   };
+
   roster: Player[];
+
   points?: number;
 }
 
@@ -69,45 +78,53 @@ export interface Division {
 }
 
 /* ===================== MATCH EVENTS ===================== */
-/* 🔑 id ES OPCIONAL porque Supabase lo genera */
 
 export interface MatchEvent {
   id?: number;
   match_id: number | string;
   player_id: number | string;
   team_id: number | string;
-  playerName?: string;
-  player_name?: string;
-  assistName?: string;
-  assist_name?: string;
-  playerOutName?: string;
-  player_out_name?: string;
-  type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'ASSIST' | 'SUBSTITUTION';
+
+  type:
+    | 'GOAL'
+    | 'ASSIST'
+    | 'YELLOW_CARD'
+    | 'RED_CARD'
+    | 'SUBSTITUTION';
+
   minute: number;
+
   session_id?: string;
+
+  /** Extras opcionales (UI) */
+  playerName?: string;
+  assistName?: string;
+  playerOutName?: string;
 }
 
 /* ===================== MATCH ===================== */
 
 export interface MatchResult {
   id: number | string;
+
   season?: number;
+  round?: number;
   week?: number;
+
   home_team: number | string;
   away_team: number | string;
+
   home_goals: number;
   away_goals: number;
-  round?: number;
+
   played: boolean;
   division_id: number;
+
   competition?: string;
   session_id?: string;
-  homeTeamId?: number | string;
-  awayTeamId?: number | string;
-  homeScore?: number;
-  awayScore?: number;
-  isImportant?: boolean;
+
   mvpId?: number | string;
+
   events?: MatchEvent[];
 }
 
@@ -115,8 +132,8 @@ export interface MatchResult {
 
 export interface TeamOfTheWeekPlayer extends Player {
   teamName: string;
-  teamLogoUrl: string;
-  teamDataAiHint: string;
+  teamLogoUrl?: string;
+  teamDataAiHint?: string;
 }
 
 /* ===================== CONTEXT ===================== */
@@ -127,6 +144,7 @@ export interface LeagueContextType {
   matches: MatchResult[];
   matchEvents: MatchEvent[];
   players: Player[];
+
   isLoaded: boolean;
   sessionId: string;
 
@@ -152,12 +170,16 @@ export interface LeagueContextType {
   getTeamByPlayerId: (playerId: number | string) => Team | undefined;
 
   /* ===== MATCHES ===== */
-  simulateMatchday: () => void;
-  getMatchEvents: (matchId: string | number) => MatchEvent[];
+  simulateMatchday: () => Promise<void>;
+  getMatchEvents: (matchId: number | string) => MatchEvent[];
+
   getTeamOfTheWeek: (week: number) => TeamOfTheWeekPlayer[];
 
   /* week | month | season */
-  getBestEleven: (type: string, val?: number) => TeamOfTheWeekPlayer[];
+  getBestEleven: (
+    type: 'week' | 'month' | 'season',
+    value?: number
+  ) => TeamOfTheWeekPlayer[];
 
   lastPlayedWeek: number;
 
