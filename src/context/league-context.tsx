@@ -105,7 +105,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  // --- MOTOR DE GENERACIÓN DINÁMICO REPARADO (GENERACIÓN MASIVA) ---
+  // --- MOTOR DE CALENDARIO COMPLETO (SISTEMA BERGER) ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId || !currentSeasonId) return;
 
@@ -113,7 +113,18 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const divTeams = teams.filter(t => Number(t.division_id) === div.id && (t.roster?.length || 0) >= 11);
       if (divTeams.length < 2) continue;
 
-      // Sincronizar Standings
+      // Verificar si ya existe el calendario para esta división y temporada
+      const { data: existing } = await supabase
+        .from('matches')
+        .select('id')
+        .eq('division_id', div.id)
+        .eq('season_id', currentSeasonId)
+        .eq('session_id', sessionId)
+        .limit(1);
+
+      if (existing && existing.length > 0) continue;
+
+      // Registro masivo en Standings
       const { data: standings } = await supabase.from('standings').select('team_id').eq('season_id', currentSeasonId);
       const toReg = divTeams.filter(dt => !standings?.some(s => Number(s.team_id) === Number(dt.id)));
       if (toReg.length > 0) {
@@ -122,25 +133,39 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         })));
       }
 
-      const targetRound = 1;
-      // Corregido: Filtrar solo equipos que NO tengan partido en esta temporada/jornada
-      const teamsWithMatch = new Set(
-        matches
-          .filter(m => m.round === targetRound && String(m.season_id) === String(currentSeasonId) && m.division_id === div.id)
-          .flatMap(m => [String(m.home_team), String(m.away_team)])
-      );
-      
-      const available = divTeams.filter(t => !teamsWithMatch.has(String(t.id)));
+      // Algoritmo de Berger para Calendario de Ida y Vuelta
+      let scheduleTeams = [...divTeams];
+      if (scheduleTeams.length % 2 !== 0) {
+        scheduleTeams.push({ id: "FREE", name: "DESCANSO" } as any);
+      }
 
-      // Generación masiva: emparejar a todos los libres disponibles
-      if (available.length >= 2) {
-        const toCreate = [];
-        for (let i = 0; i < available.length; i += 2) {
-          if (i + 1 < available.length) {
-            toCreate.push({
-              home_team: Number(available[i].id),
-              away_team: Number(available[i + 1].id),
-              round: targetRound,
+      const n = scheduleTeams.length;
+      const rounds = n - 1;
+      const allMatches = [];
+
+      for (let j = 0; j < rounds; j++) {
+        for (let i = 0; i < n / 2; i++) {
+          const home = scheduleTeams[i];
+          const away = scheduleTeams[n - 1 - i];
+
+          if (home.id !== "FREE" && away.id !== "FREE") {
+            // IDA
+            allMatches.push({
+              home_team: Number(home.id),
+              away_team: Number(away.id),
+              round: j + 1,
+              played: false,
+              division_id: div.id,
+              competition: "League",
+              session_id: sessionId,
+              season_id: currentSeasonId 
+            });
+
+            // VUELTA (Espejo de la Ida)
+            allMatches.push({
+              home_team: Number(away.id),
+              away_team: Number(home.id),
+              round: j + 1 + rounds,
               played: false,
               division_id: div.id,
               competition: "League",
@@ -149,22 +174,23 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             });
           }
         }
+        // Rotación de Berger: dejamos el primero fijo y rotamos el resto
+        scheduleTeams.splice(1, 0, scheduleTeams.pop()!);
+      }
 
-        if (toCreate.length > 0) {
-          const { data, error } = await supabase.from('matches').insert(toCreate).select();
-          if (error) console.error("Error insertando partidos masivos:", error.message);
-          if (data) setMatches(prev => [...prev, ...data]);
-        }
+      if (allMatches.length > 0) {
+        const { data, error } = await supabase.from('matches').insert(allMatches).select();
+        if (data) setMatches(prev => [...prev, ...data]);
       }
     }
   }, [teams, matches, isLoaded, sessionId, currentSeasonId, divisions]);
 
   useEffect(() => { 
-    const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 1500);
+    const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 2000);
     return () => clearTimeout(timer);
   }, [teams.length, isLoaded, autoMatchmaker]);
 
-  // --- PROCESADO DE EQUIPOS (BLINDAJE DE STATS Y RATINGS) ---
+  // --- PROCESADO DE EQUIPOS (BLINDAJE DE STATS) ---
   const processedTeams = useMemo(() => {
     if (!isLoaded || teams.length === 0) return [];
     
@@ -250,7 +276,15 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
     simulateMatchday: async () => {
-      const week = matches.find(m => !m.played)?.round || 1;
+      // Buscar la jornada más baja que tenga partidos sin jugar
+      const nextMatch = matches.find(m => !m.played);
+      if (!nextMatch) {
+        alert("No hay más jornadas para simular.");
+        return;
+      }
+      
+      const week = nextMatch.round || 1;
+      
       await fetch("/api/match/simulate-matchday", { 
         method: "POST", 
         headers: { "Content-Type": "application/json" }, 
