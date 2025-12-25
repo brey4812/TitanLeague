@@ -150,6 +150,7 @@ export interface LeagueContextType {
 
   isLoaded: boolean;
   sessionId: string;
+  isSeasonFinished: boolean;
 
   /* ===== TEMPORADA ===== */
   season: number;

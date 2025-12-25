@@ -196,6 +196,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(timer);
   }, [teams.length, isLoaded, autoMatchmaker]);
 
+  // --- DETECCIÓN DE FIN DE TEMPORADA ---
+  const isSeasonFinished = useMemo(() => {
+    if (!isLoaded || matches.length === 0) return false;
+    const leagueMatches = matches.filter(m => m.competition === "League" && String(m.season_id) === String(currentSeasonId));
+    if (leagueMatches.length === 0) return false;
+    return leagueMatches.every(m => m.played);
+  }, [matches, isLoaded, currentSeasonId]);
+
   // --- PROCESADO DE EQUIPOS (STATS) ---
   const processedTeams = useMemo(() => {
     if (!isLoaded || teams.length === 0) return [];
@@ -256,8 +264,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     isLoaded,
     sessionId,
     season: currentSeason,
+    isSeasonFinished,
     nextSeason: async () => {
-      if (!confirm("¿Cerrar temporada y aplicar ascensos/descensos?")) return;
+      const confirmMsg = isSeasonFinished 
+        ? "¡Temporada terminada! ¿Deseas aplicar ascensos/descensos e iniciar la nueva temporada?"
+        : "Aún quedan partidos por jugar. ¿Estás seguro de que quieres forzar el cierre de temporada?";
+
+      if (!confirm(confirmMsg)) return;
       
       const updatedTeams = applyPromotionsAndRelegations(processedTeams);
       setTeams(updatedTeams);
