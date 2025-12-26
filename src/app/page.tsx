@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { LeagueContext } from "@/context/league-context";
-import { Trophy, Calendar, Goal, X, FastForward, AlertTriangle } from "lucide-react";
+import { Trophy, Calendar, Goal, X, FastForward, AlertTriangle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { MatchResult } from "@/lib/types";
@@ -20,29 +20,38 @@ export default function DashboardPage() {
     getMatchEvents,
     season,
     nextSeason,
-    isSeasonFinished, // Consumimos la propiedad corregida del context
   } = useContext(LeagueContext);
 
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
 
   /* =======================
-      SANEAMIENTO DE DATOS
+      SANEAMIENTO Y LÓGICA GLOBAL
      ======================= */
   const safeTeams = useMemo(() => (Array.isArray(teams) ? teams : []), [teams]);
   const safeMatches = useMemo(() => (Array.isArray(matches) ? matches : []), [matches]);
-  
   const currentSeasonNum = Number(season || 1);
 
-  // Goles totales de la temporada actual
+  // BLOQUEO DE SEGURIDAD GLOBAL: 
+  // Solo es true si TODOS los partidos de liga de la temporada actual están jugados
+  const isGlobalSeasonFinished = useMemo(() => {
+    if (!isLoaded || safeMatches.length === 0) return false;
+
+    const currentSeasonMatches = safeMatches.filter(
+      (m) => m.competition === "League" && Number(m.season_id || m.season) === currentSeasonNum
+    );
+
+    if (currentSeasonMatches.length === 0) return false;
+
+    // Verificamos que absolutamente todos los partidos programados tengan played: true
+    return currentSeasonMatches.every((m) => m.played === true);
+  }, [safeMatches, currentSeasonNum, isLoaded]);
+
+  // Contador de goles totales (Solo temporada actual)
   const totalGoals = useMemo(() => {
     if (!isLoaded) return 0;
     return safeMatches
-      .filter((m) => m.played && String(m.season_id || m.season) === String(currentSeasonNum))
-      .reduce(
-        (sum, m) =>
-          sum + (Number(m.home_goals) || 0) + (Number(m.away_goals) || 0),
-        0
-      );
+      .filter((m) => m.played && Number(m.season_id || m.season) === currentSeasonNum)
+      .reduce((sum, m) => sum + (Number(m.home_goals) || 0) + (Number(m.away_goals) || 0), 0);
   }, [safeMatches, currentSeasonNum, isLoaded]);
 
   /* =======================
@@ -50,57 +59,46 @@ export default function DashboardPage() {
      ======================= */
   if (!isLoaded) {
     return (
-      <div className="flex h-[60vh] items-center justify-center font-black italic text-slate-400 animate-pulse uppercase">
+      <div className="flex h-[60vh] items-center justify-center font-black italic text-slate-400 animate-pulse uppercase tracking-widest">
         Sincronizando con Liga Titán...
       </div>
     );
   }
 
   const stats = [
-    {
-      title: "Temporada",
-      value: currentSeasonNum,
-      icon: <FastForward className="h-5 w-5 text-orange-600" />,
-    },
-    {
-      title: "Equipos",
-      value: safeTeams.length,
-      icon: <Trophy className="h-5 w-5 text-blue-600" />,
-    },
-    {
-      title: "Jornada Actual",
-      value: Number(lastPlayedWeek || 1),
-      icon: <Calendar className="h-5 w-5 text-purple-600" />,
-    },
-    {
-      title: "Goles (Temp)",
-      value: totalGoals,
-      icon: <Goal className="h-5 w-5 text-red-600" />,
-    },
+    { title: "Temporada", value: currentSeasonNum, icon: <FastForward className="h-5 w-5 text-orange-600" /> },
+    { title: "Equipos Totales", value: safeTeams.length, icon: <Trophy className="h-5 w-5 text-blue-600" /> },
+    { title: "Jornada Actual", value: Number(lastPlayedWeek || 1), icon: <Calendar className="h-5 w-5 text-purple-600" /> },
+    { title: "Goles (Temp)", value: totalGoals, icon: <Goal className="h-5 w-5 text-red-600" /> },
   ];
 
   return (
     <div className="container mx-auto py-6 space-y-8 relative">
-      {/* BANNER ESPECIAL SI LA TEMPORADA HA TERMINADO */}
-      {isSeasonFinished && (
-        <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 p-6 rounded-xl shadow-2xl mb-6 text-white flex flex-col md:flex-row items-center justify-between gap-6 border-b-4 border-blue-400">
+      
+      {/* BANNER DE CLAUSURA: Solo si TODAS las divisiones han terminado */}
+      {isGlobalSeasonFinished && (
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 p-6 rounded-xl shadow-2xl mb-6 text-white flex flex-col md:flex-row items-center justify-between gap-6 border-b-4 border-emerald-400 animate-in slide-in-from-top-4 duration-700">
           <div className="flex items-center gap-5">
             <div className="bg-white/20 p-4 rounded-full backdrop-blur-md">
-              <Trophy className="w-10 h-10 text-yellow-400 animate-bounce" />
+              <ShieldCheck className="w-10 h-10 text-yellow-300 animate-pulse" />
             </div>
             <div>
-              <h2 className="text-2xl font-black uppercase italic tracking-tighter">¡Temporada Finalizada!</h2>
-              <p className="text-blue-100 text-sm font-medium">Todos los partidos han sido disputados. Es momento de coronar campeones y gestionar ascensos.</p>
+              <h2 className="text-2xl font-black uppercase italic tracking-tighter">Temporada {currentSeasonNum} Completada</h2>
+              <p className="text-emerald-100 text-sm font-medium">Todas las divisiones han finalizado sus calendarios. Listo para procesar ascensos y descensos.</p>
             </div>
           </div>
           <Button 
             onClick={() => {
+              if (currentSeasonNum >= 10) {
+                toast.error("Has alcanzado el límite de 10 temporadas.");
+                return;
+              }
               nextSeason();
-              toast.info("Procesando cambios de división...");
+              toast.success(`¡Iniciando los preparativos de la Temporada ${currentSeasonNum + 1}!`);
             }}
-            className="bg-white text-blue-800 hover:bg-blue-50 font-black uppercase px-10 py-6 rounded-lg shadow-xl transition-all hover:scale-105 active:scale-95"
+            className="bg-white text-emerald-800 hover:bg-emerald-50 font-black uppercase px-10 py-6 rounded-lg shadow-xl transition-all hover:scale-105 active:scale-95"
           >
-            Cerrar Temporada {currentSeasonNum}
+            Cerrar Temporada {currentSeasonNum} e Ir a T{currentSeasonNum + 1}
           </Button>
         </div>
       )}
