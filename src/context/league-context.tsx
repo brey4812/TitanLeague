@@ -260,7 +260,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     season: currentSeason,
     isSeasonFinished,
     nextSeason: async () => {
-      if (currentSeason >= 10) { alert("Límite de 10 temporadas alcanzado."); return; }
+      if (currentSeason >= 10) { alert("Límite de 10 temporadas."); return; }
       const confirmMsg = isSeasonFinished ? "¿Iniciar nueva temporada?" : "¿Forzar cierre?";
       if (!confirm(confirmMsg)) return;
       
@@ -291,6 +291,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
+      // Forzamos la obtención del seasonId activo si currentSeasonId no está listo
       let seasonValue = currentSeasonId;
       if (!seasonValue) {
         const { data: activeSeason } = await supabase.from('seasons').select('id').eq('is_active', true).maybeSingle();
@@ -298,7 +299,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (!seasonValue || !sessionId) {
-        toast.error("Faltan parámetros críticos de sesión o temporada.");
+        toast.error("Error: Sesión o Temporada no cargada correctamente.");
         return;
       }
 
@@ -320,7 +321,9 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         }
 
         await refreshData();
+        toast.success("Jornada simulada.");
       } catch (err: any) {
+        console.error("Error Sim:", err.message);
         toast.error(`Error: ${err.message}`);
       }
     },
@@ -329,8 +332,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         .filter(e => String(e.match_id) === String(id))
         .map(e => ({ 
             ...e, 
-            playerName: e.player_name || e.playerName, 
-            assistName: e.assist_name || e.assistName 
+            playerName: e.player_name || (e as any).playerName, 
+            assistName: e.assist_name || (e as any).assistName 
         })),
 
     getTeamOfTheWeek: (w) => {
@@ -352,10 +355,15 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
     resetLeagueData: async () => { 
       if(confirm("¿Resetear todos los datos de esta sesión?")) { 
-        await supabase.from('match_events').delete().eq('session_id', sessionId);
-        await supabase.from('matches').delete().eq('session_id', sessionId);
-        localStorage.clear(); 
-        window.location.reload(); 
+        try {
+          await supabase.from('match_events').delete().eq('session_id', sessionId);
+          await supabase.from('matches').delete().eq('session_id', sessionId);
+          localStorage.clear(); 
+          window.location.reload(); 
+        } catch (error) {
+          console.error(error);
+          toast.error("Error al limpiar base de datos.");
+        }
       } 
     },
     importLeagueData: (newData) => { localStorage.setItem('league_active_teams', JSON.stringify(newData)); setTeams(newData); return true; },
