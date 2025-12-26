@@ -48,7 +48,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         supabase.from('matches')
           .select('*')
           .eq('session_id', sessionId)
-          .order('matchday', { ascending: true }), // Usamos matchday que es la columna real
+          .order('matchday', { ascending: true }), 
         supabase.from('match_events').select('*').eq('session_id', sessionId),
         supabase.from('seasons').select('id, season_number').eq('is_active', true).maybeSingle()
       ]);
@@ -59,7 +59,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
       
       if (matchesRes.data) {
-        // Mapeamos matchday de vuelta a round para no romper la UI
+        // IMPORTANTE: Mapeamos matchday de la DB a round de la UI para que todo funcione
         const normalized = matchesRes.data.map(m => ({
           ...m,
           round: m.matchday 
@@ -137,7 +137,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       
       if (allTeamsRegistered && existingMatches && existingMatches.length > 0) continue;
 
-      // Limpieza agresiva de duplicados (solo no jugados)
+      // Limpieza agresiva de duplicados: borra lo no jugado para esta sesión antes de recrear
       await supabase
         .from('matches')
         .delete()
@@ -161,16 +161,18 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           const away = scheduleTeams[n - 1 - i];
 
           if (home.id !== "FREE" && away.id !== "FREE") {
+            // IDA
             allMatches.push({
               home_team: Number(home.id),
               away_team: Number(away.id),
-              matchday: j + 1, // Columna real en DB
+              matchday: j + 1, // Guardamos como matchday en la DB
               played: false,
               division_id: div.id,
               competition: "League",
               session_id: sessionId,
               season_id: currentSeasonId 
             });
+            // VUELTA
             allMatches.push({
               home_team: Number(away.id),
               away_team: Number(home.id),
@@ -187,7 +189,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (allMatches.length > 0) {
-        const { data } = await supabase.from('matches').insert(allMatches).select();
+        const { data, error } = await supabase.from('matches').insert(allMatches).select();
         if (data) {
           const normalizedNew = data.map(m => ({ ...m, round: m.matchday }));
           setMatches(prev => {
@@ -284,8 +286,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     players: processedTeams.flatMap(t => t.roster || []),
     isLoaded,
     sessionId,
-    isSeasonFinished,
     season: currentSeason,
+    isSeasonFinished,
     nextSeason: async () => {
       const confirmMsg = isSeasonFinished 
         ? "¡Temporada terminada! ¿Deseas aplicar ascensos/descensos e iniciar la nueva temporada?"
