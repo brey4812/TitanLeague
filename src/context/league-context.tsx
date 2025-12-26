@@ -2,7 +2,7 @@
 
 import { createContext, useState, ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Team, Player, MatchResult, Division, LeagueContextType, MatchEvent } from "@/lib/types";
+import { Team, Player, MatchResult, Division, LeagueContextType, MatchEvent, TeamOfTheWeekPlayer } from "@/lib/types";
 import { calculatePlayerRating } from "@/lib/calculatePlayerRating";
 import { toast } from "sonner";
 
@@ -316,8 +316,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           body: JSON.stringify({ 
             divisionId: Number(nextMatch.division_id), 
             week: Number(nextMatch.matchday || 1), 
-            session: String(sessionId), 
-            season: Number(seasonValue) 
+            sessionId: String(sessionId), 
+            seasonId: Number(seasonValue) 
           }) 
         });
 
