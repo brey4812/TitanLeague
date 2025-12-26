@@ -10,7 +10,9 @@ export interface Player {
   name: string;
   position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward';
   country?: string;
+  nationality?: string; // Añadido para consistencia con la DB
   face_url?: string;
+  image_url?: string | null; // Añadido para compatibilidad con el buscador
   team_id?: number | string;
 
   /** ⭐ MEDIA ACTUAL (calculada) */
@@ -87,7 +89,8 @@ export interface MatchEvent {
   match_id: number | string;
   player_id: number | string;
   team_id: number | string;
-  type: 'GOAL' | 'ASSIST' | 'YELLOW_CARD' | 'RED_CARD' | 'SUBSTITUTION';
+  // CORRECCIÓN: Añadido 'SUB' para compatibilidad y 'CLEAN_SHEET'
+  type: 'GOAL' | 'ASSIST' | 'YELLOW_CARD' | 'RED_CARD' | 'SECOND_YELLOW' | 'SUBSTITUTION' | 'SUB' | 'CLEAN_SHEET';
   minute: number;
   session_id?: string;
 

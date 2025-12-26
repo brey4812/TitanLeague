@@ -83,7 +83,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- LÓGICA DE ASCENSOS Y DESCENSOS ---
   const applyPromotionsAndRelegations = useCallback((currentTeams: Team[]) => {
     const teamsByDiv: Record<number, Team[]> = { 1: [], 2: [], 3: [], 4: [] };
     currentTeams.forEach(t => { 
@@ -119,7 +118,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  // --- MOTOR DE CALENDARIO DINÁMICO ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId || !currentSeasonId) return;
 
@@ -212,8 +210,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (!isLoaded || matches.length === 0) return false;
     const leagueMatches = matches.filter(m => m.competition === "League" && String(m.season_id) === String(currentSeasonId));
     if (leagueMatches.length === 0) return false;
-    // La temporada solo termina si TODOS los partidos de la liga actual están jugados
-    return leagueMatches.every(m => m.played === true);
+    return leagueMatches.every(m => m.played);
   }, [matches, isLoaded, currentSeasonId]);
 
   const processedTeams = useMemo(() => {
@@ -292,9 +289,9 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     season: currentSeason,
     isSeasonFinished,
     nextSeason: async () => {
-      // LÍMITE DE 10 TEMPORADAS
+      // Cambio agregado: Límite de 10 temporadas
       if (currentSeason >= 10) {
-        alert("Has alcanzado el límite máximo de 10 temporadas en la Liga Titán.");
+        alert("Has alcanzado el límite máximo de 10 temporadas.");
         return;
       }
 
@@ -327,8 +324,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
     simulateMatchday: async () => {
-      // Buscamos el primer partido NO jugado para determinar la jornada
-      const nextMatch = matches.find(m => m.played === false);
+      const nextMatch = matches.find(m => !m.played);
       if (!nextMatch) {
         alert("No hay más jornadas para simular.");
         return;
@@ -337,7 +333,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const week = nextMatch.round || 1;
       
       await fetch("/api/match/simulate-matchday", { 
-        // Cambiado divisionId a Number para evitar errores de tipo
         method: "POST", 
         headers: { "Content-Type": "application/json" }, 
         body: JSON.stringify({ divisionId: Number(nextMatch.division_id), week, sessionId, seasonId: currentSeasonId }) 
@@ -360,7 +355,20 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     drawTournament: async (n) => {
         console.log("Sorteando torneo:", n);
     }, 
-    resetLeagueData: async () => { if(confirm("¿Resetear todos los datos?")) { await supabase.from('matches').delete().eq('session_id', sessionId); localStorage.clear(); window.location.reload(); } },
+    resetLeagueData: async () => { 
+      // Cambio fundamental: Reseteo profundo de base de datos y sesión
+      if(confirm("¿Resetear todos los datos? Esto reiniciará la liga a la Temporada 1.")) { 
+        await supabase.from('matches').delete().eq('session_id', sessionId);
+        await supabase.from('match_events').delete().eq('session_id', sessionId);
+        // Desactivamos temporadas antiguas
+        await supabase.from('seasons').update({ is_active: false }).neq('season_number', 0);
+        // Creamos temporada 1 nueva
+        await supabase.from('seasons').insert([{ season_number: 1, is_active: true }]);
+        
+        localStorage.clear(); 
+        window.location.reload(); 
+      } 
+    },
     importLeagueData: (newData) => { localStorage.setItem('league_active_teams', JSON.stringify(newData)); setTeams(newData); return true; },
     refreshData
   };
