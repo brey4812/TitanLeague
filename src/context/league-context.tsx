@@ -60,7 +60,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
       
       if (matchesRes.data) {
-        // Aseguramos que round y matchday existan para evitar errores de envío
+        // Sincronización: Si round es NULL en DB, usamos matchday para que la UI funcione
         const normalized = matchesRes.data.map(m => ({
           ...m,
           round: m.matchday || 1
@@ -292,12 +292,18 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // CORRECCIÓN: Si round está en NULL en DB, usamos matchday. Aseguramos seasonValue.
+      // SOLUCIÓN AL ERROR 400: Obtenemos el ID de temporada directamente si el estado no ha cargado
+      let seasonValue = currentSeasonId;
+      if (!seasonValue) {
+        const { data: activeSeason } = await supabase.from('seasons').select('id').eq('is_active', true).maybeSingle();
+        if (activeSeason) seasonValue = activeSeason.id;
+      }
+
+      // Validar datos antes del envío
       const weekValue = nextMatch.matchday || nextMatch.round || 1;
-      const seasonValue = currentSeasonId || nextMatch.season_id;
 
       if (!seasonValue || !sessionId) {
-        toast.error("Error: Sesión o Temporada no detectada. Recarga.");
+        toast.error("Error: Sesión o Temporada no detectada. Recarga la página.");
         return;
       }
 
