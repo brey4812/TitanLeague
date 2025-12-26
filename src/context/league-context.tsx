@@ -59,7 +59,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
       
       if (matchesRes.data) {
-        // IMPORTANTE: Mapeamos matchday de la DB a round de la UI para que todo funcione
         const normalized = matchesRes.data.map(m => ({
           ...m,
           round: m.matchday 
@@ -83,7 +82,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- LÓGICA DE ASCENSOS Y DESCENSOS ---
   const applyPromotionsAndRelegations = useCallback((currentTeams: Team[]) => {
     const teamsByDiv: Record<number, Team[]> = { 1: [], 2: [], 3: [], 4: [] };
     currentTeams.forEach(t => { 
@@ -119,7 +117,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  // --- MOTOR DE CALENDARIO DINÁMICO ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId || !currentSeasonId) return;
 
@@ -139,7 +136,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       
       if (allTeamsRegistered && existingMatches && existingMatches.length > 0) continue;
 
-      // Limpieza agresiva de duplicados: borra lo no jugado para esta sesión antes de recrear
       await supabase
         .from('matches')
         .delete()
@@ -163,18 +159,16 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           const away = scheduleTeams[n - 1 - i];
 
           if (home.id !== "FREE" && away.id !== "FREE") {
-            // IDA
             allMatches.push({
               home_team: Number(home.id),
               away_team: Number(away.id),
-              matchday: j + 1, // Guardamos como matchday en la DB
+              matchday: j + 1,
               played: false,
               division_id: div.id,
               competition: "League",
               session_id: sessionId,
               season_id: currentSeasonId 
             });
-            // VUELTA
             allMatches.push({
               home_team: Number(away.id),
               away_team: Number(home.id),
@@ -212,7 +206,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (!isLoaded || matches.length === 0) return false;
     const leagueMatches = matches.filter(m => m.competition === "League" && String(m.season_id) === String(currentSeasonId));
     if (leagueMatches.length === 0) return false;
-    // La temporada solo termina si TODOS los partidos de la liga actual están jugados
     return leagueMatches.every(m => m.played === true);
   }, [matches, isLoaded, currentSeasonId]);
 
@@ -221,7 +214,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
-      
       const teamMatches = matches.filter(m => 
         m.played && 
         String(m.season_id) === String(currentSeasonId) && 
@@ -232,52 +224,32 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         const isHome = String(m.home_team) === String(team.id);
         const gFor = isHome ? Number(m.home_goals) : Number(m.away_goals);
         const gAg = isHome ? Number(m.away_goals) : Number(m.home_goals);
-        
         stats.goalsFor += gFor;
         stats.goalsAgainst += gAg;
-        
-        if (gFor > gAg) {
-          stats.wins += 1;
-          stats.points += 3;
-        } else if (gFor === gAg) {
-          stats.draws += 1;
-          stats.points += 1;
-        } else {
-          stats.losses += 1;
-        }
+        if (gFor > gAg) { stats.wins += 1; stats.points += 3; }
+        else if (gFor === gAg) { stats.draws += 1; stats.points += 1; }
+        else { stats.losses += 1; }
       });
 
       const updatedRoster = (team.roster || []).map(player => {
         const playerStats = player.stats || { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 };
         const ratings: number[] = [];
-        
         teamMatches.forEach(match => {
           const events = matchEvents.filter(e => String(e.match_id) === String(match.id));
           const isHome = String(match.home_team) === String(team.id);
           const cleanSheet = (isHome ? Number(match.away_goals) : Number(match.home_goals)) === 0;
           ratings.push(calculatePlayerRating(player, events, cleanSheet));
         });
-
         const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
         const pAssists = matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name));
-        
         return {
           ...player,
           rating: ratings.length > 0 ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)) : 6.0,
-          stats: { 
-            ...playerStats, 
-            goals: pEvents.filter(e => e.type === 'GOAL').length, 
-            assists: pAssists.length 
-          }
+          stats: { ...playerStats, goals: pEvents.filter(e => e.type === 'GOAL').length, assists: pAssists.length }
         };
       });
 
-      return {
-        ...team,
-        stats,
-        points: stats.points,
-        roster: updatedRoster
-      };
+      return { ...team, stats, points: stats.points, roster: updatedRoster };
     });
   }, [teams, matches, matchEvents, currentSeasonId, isLoaded]);
 
@@ -292,16 +264,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     season: currentSeason,
     isSeasonFinished,
     nextSeason: async () => {
-      // LÍMITE DE 10 TEMPORADAS
-      if (currentSeason >= 10) {
-        alert("Has alcanzado el límite máximo de 10 temporadas en la Liga Titán.");
-        return;
-      }
-
+      if (currentSeason >= 10) { alert("Has alcanzado el límite máximo de 10 temporadas."); return; }
       const confirmMsg = isSeasonFinished 
-        ? "¡Temporada terminada! ¿Deseas aplicar ascensos/descensos e iniciar la nueva temporada?"
-        : "Aún quedan partidos por jugar. ¿Estás seguro de que quieres forzar el cierre de temporada?";
-
+        ? "¡Temporada terminada! ¿Deseas aplicar ascensos/descensos?" 
+        : "Aún quedan partidos. ¿Forzar cierre?";
       if (!confirm(confirmMsg)) return;
       
       const updatedTeams = applyPromotionsAndRelegations(processedTeams);
@@ -326,34 +292,36 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getTeamById: (id) => processedTeams.find(t => String(t.id) === String(id)),
     getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
+    
     simulateMatchday: async () => {
-      // CORRECCIÓN PARA EVITAR ERROR 400: Buscar el partido no jugado
       const nextMatch = matches.find(m => m.played === false);
-      if (!nextMatch) {
-        alert("No hay más jornadas para simular.");
-        return;
-      }
-      
-      // Aseguramos valores correctos para enviar a la API
-      const weekValue = nextMatch.round || nextMatch.matchday || 1;
-      const sessionValue = sessionId;
-      const seasonValue = currentSeasonId;
+      if (!nextMatch) return alert("No hay más jornadas.");
 
-      // Validación previa al fetch
-      if (!weekValue || !sessionValue || !seasonValue) {
-        console.error("Faltan datos críticos para simular:", { weekValue, sessionValue, seasonValue });
-        alert("Error: Sesión o Temporada no cargada correctamente. Recarga la página.");
+      // Forzamos la búsqueda del seasonId actual si currentSeasonId es null
+      let seasonValue = currentSeasonId;
+      
+      if (!seasonValue) {
+        const { data: activeSeason } = await supabase
+          .from('seasons')
+          .select('id')
+          .eq('is_active', true)
+          .maybeSingle();
+        if (activeSeason) seasonValue = activeSeason.id;
+      }
+
+      if (!seasonValue) {
+        alert("Error: No se encontró una temporada activa. Por favor, recarga la página.");
         return;
       }
-      
+
       try {
         const res = await fetch("/api/match/simulate-matchday", { 
           method: "POST", 
           headers: { "Content-Type": "application/json" }, 
           body: JSON.stringify({ 
             divisionId: Number(nextMatch.division_id), 
-            week: Number(weekValue), 
-            sessionId: String(sessionValue), 
+            week: Number(nextMatch.round || nextMatch.matchday || 1), 
+            sessionId: sessionId, 
             seasonId: Number(seasonValue) 
           }) 
         });
@@ -365,11 +333,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
         await refreshData();
       } catch (err: any) {
-        console.error("Error al simular jornada:", err.message);
-        alert(`Error al simular: ${err.message}`);
+        alert(`Error: ${err.message}`);
       }
     },
-    // CORRECCIÓN: Mapear player_name y assist_name para la UI
+
     getMatchEvents: (id) => matchEvents
         .filter(e => String(e.match_id) === String(id))
         .map(e => ({ 
@@ -389,15 +356,11 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       return { titanPeak: sorted.slice(0, 4), colossusShield: sorted.slice(4, 8) };
     },
     getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
-    drawTournament: async (n) => {
-        console.log("Sorteando torneo:", n);
-    }, 
+    drawTournament: async (n) => { console.log("Sorteando torneo:", n); }, 
     resetLeagueData: async () => { 
-      if(confirm("¿Resetear todos los datos? Esto borrará tu progreso y partidos en la base de datos.")) { 
-        // Primero borramos eventos, luego partidos filtrando por sessionId
+      if(confirm("¿Resetear todos los datos?")) { 
         await supabase.from('match_events').delete().eq('session_id', sessionId);
         await supabase.from('matches').delete().eq('session_id', sessionId);
-        
         localStorage.clear(); 
         window.location.reload(); 
       } 

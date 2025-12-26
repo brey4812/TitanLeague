@@ -116,6 +116,7 @@ export interface MatchResult {
   /** ⚡ REQUERIDO: season_id para coincidir con la DB */
   season_id: number | string; 
   
+  
   /** Campos adicionales para compatibilidad con UI */
   season?: number;
   round?: number; // Usado para identificar la jornada en la UI
