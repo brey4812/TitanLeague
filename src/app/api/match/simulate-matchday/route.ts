@@ -17,7 +17,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    // Normalización para aceptar cualquier formato de entrada del frontend
+    // --- NORMALIZACIÓN DEFINITIVA ---
+    // Aceptamos ambos formatos para que no importe cómo se envíe desde el frontend
     const week = Number(body.week);
     const sessionId = String(body.sessionId || body.session);
     const seasonId = Number(body.seasonId || body.season);
@@ -28,7 +29,8 @@ export async function POST(req: Request) {
     if (!week || !sessionId || !seasonId) {
       return NextResponse.json({ 
         ok: false, 
-        error: "Faltan parámetros críticos (week, session o season)" 
+        error: "Faltan parámetros críticos (week, session o season)",
+        received: { week, sessionId, seasonId } 
       }, { status: 400 });
     }
 

@@ -298,7 +298,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // RECUPERACIÓN DE DATOS FALTANTES (CORRECCIÓN CON ANY PARA EVITAR ERROR TYPESCRIPT)
+      // BUSCAMOS LOS IDs FALTANTES (seasonId y leagueId)
       let seasonValue = currentSeasonId || (nextMatch as any).season_id;
       
       if (!seasonValue) {
@@ -306,12 +306,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         if (activeSeason) seasonValue = activeSeason.id;
       }
 
-      // Obtenemos el leagueId de la tabla leagues (Titan League es ID 1)
+      // Vemos que en tu tabla 'leagues' el ID de Titan League es 1
       const { data: leagueData } = await supabase.from('leagues').select('id').limit(1).single();
       const leagueIdToSend = (nextMatch as any).league_id || (leagueData ? leagueData.id : 1);
 
       if (!seasonValue || !sessionId) {
-        alert("Error: Sesión o Temporada no detectada. Recarga la página.");
+        alert("Error: No se detectó la temporada o sesión. Recarga la página.");
         return;
       }
 
