@@ -16,11 +16,20 @@ interface PlayerSim {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { divisionId, week, sessionId, seasonId } = body;
+    
+    // CORRECCIÓN: Aceptamos tanto session como sessionId, y season como seasonId
+    const week = body.week;
+    const sessionId = body.session || body.sessionId;
+    const seasonId = body.season || body.seasonId;
+    const divisionId = body.divisionId;
 
-    // 1. Validaciones iniciales
+    // 1. Validaciones iniciales (Ahora revisamos las variables normalizadas)
     if (!week || !sessionId || !seasonId) {
-      return NextResponse.json({ ok: false, error: "Faltan parámetros críticos (week, session o season)" }, { status: 400 });
+      return NextResponse.json({ 
+        ok: false, 
+        error: "Faltan parámetros críticos (week, session o season)",
+        received: { week, sessionId, seasonId } // Ayuda a debuguear
+      }, { status: 400 });
     }
 
     // 2. Bloqueo de seguridad: No permitir simular jornada N si la N-1 tiene partidos pendientes
@@ -42,10 +51,9 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. OBTENER JUGADORES SANCIONADOS (CORRECCIÓN: Se separó la consulta para evitar error de subquery)
+    // 3. OBTENER JUGADORES SANCIONADOS
     let sanctionedIds = new Set<string>();
     if (week > 1) {
-      // Primero obtenemos los IDs de los partidos de la jornada anterior de forma real
       const { data: prevMatches } = await supabase
         .from("matches")
         .select("id")
@@ -56,7 +64,6 @@ export async function POST(req: Request) {
       const prevMatchIds = prevMatches?.map(m => m.id) || [];
 
       if (prevMatchIds.length > 0) {
-        // Luego buscamos las tarjetas en esos partidos específicos
         const { data: sanctionedEvents } = await supabase
           .from("match_events")
           .select("player_id")
@@ -184,7 +191,7 @@ export async function POST(req: Request) {
             }
           }
 
-          // LOGICA CAMBIOS (CORREGIDO: Tipo SUBSTITUTION)
+          // LOGICA CAMBIOS
           if (minute > 60 && minute < 85 && Math.random() < 0.01) {
             if (currentBench.length > 0 && currentActives.length > 0) {
               const playerOut = currentActives[Math.floor(Math.random() * currentActives.length)];
