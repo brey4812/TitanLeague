@@ -60,6 +60,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
       
       if (matchesRes.data) {
+        // Aseguramos que round y matchday existan para evitar errores de envío
         const normalized = matchesRes.data.map(m => ({
           ...m,
           round: m.matchday || 1
@@ -291,11 +292,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      const seasonValue = currentSeasonId;
+      // CORRECCIÓN: Si round está en NULL en DB, usamos matchday. Aseguramos seasonValue.
       const weekValue = nextMatch.matchday || nextMatch.round || 1;
+      const seasonValue = currentSeasonId || nextMatch.season_id;
 
       if (!seasonValue || !sessionId) {
-        toast.error("Faltan parámetros críticos de sesión o temporada.");
+        toast.error("Error: Sesión o Temporada no detectada. Recarga.");
         return;
       }
 
@@ -304,7 +306,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           method: "POST", 
           headers: { "Content-Type": "application/json" }, 
           body: JSON.stringify({ 
-            divisionId: Number(nextMatch.division_id), 
+            divisionId: String(nextMatch.division_id), 
             week: Number(weekValue), 
             sessionId: String(sessionId), 
             seasonId: Number(seasonValue) 
@@ -317,7 +319,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         }
 
         await refreshData();
-        toast.success("Jornada simulada.");
+        toast.success(`Simulada jornada ${weekValue}`);
       } catch (err: any) {
         console.error("Error Sim:", err.message);
         toast.error(`Error: ${err.message}`);
