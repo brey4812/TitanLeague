@@ -6,6 +6,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY! 
 );
 
+interface PlayerSim {
+  id: string | number;
+  team_id: string | number;
+  name: string;
+  position?: string;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -15,6 +22,7 @@ export async function POST(req: Request) {
     const sessionId = String(body.sessionId || body.session);
     const seasonId = Number(body.seasonId || body.season);
     const divisionId = body.divisionId;
+    const leagueId = Number(body.leagueId || 1); // Tomamos el ID 1 de "Titan League" si no viene
 
     // 1. Validaciones iniciales
     if (!week || !sessionId || !seasonId) {
@@ -66,7 +74,7 @@ export async function POST(req: Request) {
 
     // 6. Simulación de partidos
     for (const match of matches) {
-      const currentMatchEvents: any[] = []; // Array limpio para cada partido
+      const currentMatchEvents: any[] = []; // Array limpio para cada partido para evitar duplicados
       
       const homeRoster = allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [];
       const awayRoster = allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || [];
@@ -138,8 +146,14 @@ export async function POST(req: Request) {
         if (gk) currentMatchEvents.push({ match_id: match.id, team_id: match.away_team, type: "CLEAN_SHEET", minute: 90, player_id: gk.id, player_name: gk.name, session_id: sessionId });
       }
 
-      // 7. Actualizar Partido y Guardar Eventos
-      await supabase.from("matches").update({ home_goals: homeGoals, away_goals: awayGoals, played: true }).eq("id", match.id);
+      // 7. Actualizar Partido (Asegurando league_id) y Guardar Eventos
+      await supabase.from("matches").update({ 
+        home_goals: homeGoals, 
+        away_goals: awayGoals, 
+        played: true,
+        league_id: leagueId // Reparamos el NULL durante la simulación
+      }).eq("id", match.id);
+
       if (currentMatchEvents.length > 0) {
         const { error: insError } = await supabase.from("match_events").insert(currentMatchEvents);
         if (insError) console.error("Error insertando eventos:", insError.message);

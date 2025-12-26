@@ -298,8 +298,22 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // SOLUCIÓN CRÍTICA: Aseguramos que seasonId nunca sea nulo sacándolo del partido si el estado falla
-      const seasonValue = currentSeasonId || nextMatch.season_id;
+      // RECUPERACIÓN DE DATOS FALTANTES (CORRECCIÓN CON ANY PARA EVITAR ERROR TYPESCRIPT)
+      let seasonValue = currentSeasonId || (nextMatch as any).season_id;
+      
+      if (!seasonValue) {
+        const { data: activeSeason } = await supabase.from('seasons').select('id').eq('is_active', true).maybeSingle();
+        if (activeSeason) seasonValue = activeSeason.id;
+      }
+
+      // Obtenemos el leagueId de la tabla leagues (Titan League es ID 1)
+      const { data: leagueData } = await supabase.from('leagues').select('id').limit(1).single();
+      const leagueIdToSend = (nextMatch as any).league_id || (leagueData ? leagueData.id : 1);
+
+      if (!seasonValue || !sessionId) {
+        alert("Error: Sesión o Temporada no detectada. Recarga la página.");
+        return;
+      }
 
       try {
         const res = await fetch("/api/match/simulate-matchday", { 
@@ -309,7 +323,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             divisionId: String(nextMatch.division_id), 
             week: Number(nextMatch.matchday || 1), 
             sessionId: String(sessionId), 
-            seasonId: Number(seasonValue) // Se envía el '1' obligatorio
+            seasonId: Number(seasonValue),
+            leagueId: Number(leagueIdToSend)
           }) 
         });
 
