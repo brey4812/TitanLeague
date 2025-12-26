@@ -60,9 +60,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
       
       if (matchesRes.data) {
+        // Aseguramos que round y matchday existan para evitar errores de envío
         const normalized = matchesRes.data.map(m => ({
           ...m,
-          round: m.matchday 
+          round: m.matchday || 1
         }));
         setMatches(normalized);
       }
@@ -260,7 +261,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     season: currentSeason,
     isSeasonFinished,
     nextSeason: async () => {
-      if (currentSeason >= 10) { alert("Límite de 10 temporadas."); return; }
+      if (currentSeason >= 10) { alert("Límite de 10 temporadas alcanzado."); return; }
       const confirmMsg = isSeasonFinished ? "¿Iniciar nueva temporada?" : "¿Forzar cierre?";
       if (!confirm(confirmMsg)) return;
       
@@ -291,15 +292,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // Forzamos la obtención del seasonId activo si currentSeasonId no está listo
-      let seasonValue = currentSeasonId;
-      if (!seasonValue) {
-        const { data: activeSeason } = await supabase.from('seasons').select('id').eq('is_active', true).maybeSingle();
-        if (activeSeason) seasonValue = activeSeason.id;
-      }
+      // Forzamos que los valores sean números reales y existan
+      const seasonValue = currentSeasonId;
+      const weekValue = nextMatch.round || nextMatch.matchday;
 
       if (!seasonValue || !sessionId) {
-        toast.error("Error: Sesión o Temporada no cargada correctamente.");
+        toast.error("Datos incompletos. Intenta recargar.");
         return;
       }
 
@@ -309,7 +307,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           headers: { "Content-Type": "application/json" }, 
           body: JSON.stringify({ 
             divisionId: Number(nextMatch.division_id), 
-            week: Number(nextMatch.round || nextMatch.matchday || 1), 
+            week: Number(weekValue), 
             sessionId: String(sessionId), 
             seasonId: Number(seasonValue) 
           }) 
@@ -323,7 +321,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         await refreshData();
         toast.success("Jornada simulada.");
       } catch (err: any) {
-        console.error("Error Sim:", err.message);
         toast.error(`Error: ${err.message}`);
       }
     },
@@ -354,15 +351,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     drawTournament: async (n) => { console.log("Sorteando:", n); }, 
 
     resetLeagueData: async () => { 
-      if(confirm("¿Resetear todos los datos de esta sesión?")) { 
+      if(confirm("¿Resetear todos los datos?")) { 
         try {
           await supabase.from('match_events').delete().eq('session_id', sessionId);
           await supabase.from('matches').delete().eq('session_id', sessionId);
           localStorage.clear(); 
           window.location.reload(); 
         } catch (error) {
-          console.error(error);
-          toast.error("Error al limpiar base de datos.");
+          toast.error("Error al limpiar.");
         }
       } 
     },
