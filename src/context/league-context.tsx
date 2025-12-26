@@ -298,14 +298,16 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      let seasonValue = currentSeasonId;
+      // Buscamos el ID con prioridad: Estado actual o el guardado en el partido
+      let seasonValue = currentSeasonId || (nextMatch as any).season_id;
+      
       if (!seasonValue) {
         const { data: activeSeason } = await supabase.from('seasons').select('id').eq('is_active', true).maybeSingle();
         if (activeSeason) seasonValue = activeSeason.id;
       }
 
       if (!seasonValue || !sessionId) {
-        alert("Error: No se encontró una temporada activa o sesión. Por favor, recarga la página.");
+        alert("Error: No se detectó la temporada o sesión. Recarga la página.");
         return;
       }
 
@@ -314,8 +316,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           method: "POST", 
           headers: { "Content-Type": "application/json" }, 
           body: JSON.stringify({ 
-            divisionId: Number(nextMatch.division_id), 
-            week: Number(nextMatch.matchday || 1), 
+            divisionId: String(nextMatch.division_id), 
+            week: Number(nextMatch.matchday || 1), // Aseguramos que use matchday
             sessionId: String(sessionId), 
             seasonId: Number(seasonValue) 
           }) 

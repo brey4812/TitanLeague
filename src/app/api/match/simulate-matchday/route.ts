@@ -17,22 +17,23 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    // --- NORMALIZACIÓN DE PARÁMETROS PARA EVITAR ERROR 400 ---
-    const week = body.week;
-    const sessionId = body.session || body.sessionId;
-    const seasonId = body.season || body.seasonId;
+    // --- NORMALIZACIÓN DEFINITIVA ---
+    // Aceptamos ambos formatos para que no importe cómo se envíe desde el frontend
+    const week = Number(body.week);
+    const sessionId = String(body.sessionId || body.session);
+    const seasonId = Number(body.seasonId || body.season);
     const divisionId = body.divisionId;
 
-    // 1. Validaciones iniciales (Ahora revisamos las variables normalizadas)
-    if (!week || !sessionId || !seasonId) {
+    // 1. Validaciones iniciales
+    if (!week || sessionId === "undefined" || !seasonId) {
       return NextResponse.json({ 
         ok: false, 
-        error: "Faltan parámetros críticos (week, session o season)",
-        received: { week, sessionId, seasonId } // Ayuda a debuguear en la consola
+        error: "Faltan parámetros críticos (week, sessionId o seasonId)",
+        debug: { week, sessionId, seasonId } 
       }, { status: 400 });
     }
 
-    // 2. Bloqueo de seguridad: No permitir simular jornada N si la N-1 tiene partidos pendientes
+    // 2. Bloqueo de seguridad
     if (week > 1) {
       const { data: previousPending } = await supabase
         .from("matches")
@@ -46,12 +47,12 @@ export async function POST(req: Request) {
       if (previousPending && previousPending.length > 0) {
         return NextResponse.json({ 
           ok: false, 
-          error: "Bloqueo: Existen jornadas anteriores sin completar. Simúlalas primero." 
+          error: "Bloqueo: Existen jornadas anteriores sin completar." 
         }, { status: 400 });
       }
     }
 
-    // 3. OBTENER JUGADORES SANCIONADOS
+    // 3. OBTENER JUGADORES SANCIONADOS (Consulta en dos pasos)
     let sanctionedIds = new Set<string>();
     if (week > 1) {
       const { data: prevMatches } = await supabase
@@ -94,7 +95,7 @@ export async function POST(req: Request) {
     if (!matches || matches.length === 0) {
       return NextResponse.json({ 
         ok: true, 
-        message: `La jornada ${week} ya está completada o no tiene partidos programados.` 
+        message: `La jornada ${week} no tiene partidos pendientes.` 
       });
     }
 
