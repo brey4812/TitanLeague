@@ -327,26 +327,25 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
     simulateMatchday: async () => {
-      // 1. Buscamos el partido NO jugado
+      // CORRECCIÓN PARA EVITAR ERROR 400: Buscar el partido no jugado
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) {
         alert("No hay más jornadas para simular.");
         return;
       }
       
-      // 2. Extraemos valores asegurando que no sean nulos
+      // Aseguramos valores correctos para enviar a la API
       const weekValue = nextMatch.round || nextMatch.matchday || 1;
-      const seasonValue = currentSeasonId;
       const sessionValue = sessionId;
+      const seasonValue = currentSeasonId;
 
-      // 3. Validación de seguridad para evitar Error 400
-      if (!weekValue || !seasonValue || !sessionValue) {
-        console.error("Faltan parámetros críticos detectados en el Context:", { weekValue, seasonValue, sessionValue });
-        alert("Error de sincronización: No se pudo detectar la temporada o sesión actual. Recarga la página.");
+      // Validación previa al fetch
+      if (!weekValue || !sessionValue || !seasonValue) {
+        console.error("Faltan datos críticos para simular:", { weekValue, sessionValue, seasonValue });
+        alert("Error: Sesión o Temporada no cargada correctamente. Recarga la página.");
         return;
       }
       
-      // 4. Petición a la API con parámetros verificados
       try {
         const res = await fetch("/api/match/simulate-matchday", { 
           method: "POST", 
@@ -366,11 +365,18 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
         await refreshData();
       } catch (err: any) {
-        console.error("Error al simular:", err.message);
-        alert(`Error al simular la jornada: ${err.message}`);
+        console.error("Error al simular jornada:", err.message);
+        alert(`Error al simular: ${err.message}`);
       }
     },
-    getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({ ...e, playerName: (e as any).player_name || e.playerName, assistName: (e as any).assist_name || e.assistName })),
+    // CORRECCIÓN: Mapear player_name y assist_name para la UI
+    getMatchEvents: (id) => matchEvents
+        .filter(e => String(e.match_id) === String(id))
+        .map(e => ({ 
+            ...e, 
+            playerName: e.player_name || e.playerName, 
+            assistName: e.assist_name || e.assistName 
+        })),
     getTeamOfTheWeek: (w) => {
       const weekM = matches.filter(m => m.round === w && m.played);
       const candidates = processedTeams.flatMap(t => t.roster || []).filter(p => weekM.some(m => String(m.home_team) === String(p.team_id) || String(m.away_team) === String(p.team_id)));
@@ -388,11 +394,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }, 
     resetLeagueData: async () => { 
       if(confirm("¿Resetear todos los datos? Esto borrará tu progreso y partidos en la base de datos.")) { 
-        // Primero borramos eventos, luego partidos filtrando por sessionId para no afectar a otros
+        // Primero borramos eventos, luego partidos filtrando por sessionId
         await supabase.from('match_events').delete().eq('session_id', sessionId);
         await supabase.from('matches').delete().eq('session_id', sessionId);
         
-        // Limpiamos local storage y recargamos para forzar una nueva sesión limpia
         localStorage.clear(); 
         window.location.reload(); 
       } 
