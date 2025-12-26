@@ -13,17 +13,12 @@ interface PlayerSim {
   position?: string;
 }
 
-interface TeamData {
-  home: PlayerSim[];
-  away: PlayerSim[];
-}
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { divisionId, week, sessionId, seasonId } = body;
 
-    // 1. Validaciones iniciales de parámetros
+    // 1. Validaciones iniciales
     if (!week || !sessionId || !seasonId) {
       return NextResponse.json({ ok: false, error: "Faltan parámetros críticos (week, session o season)" }, { status: 400 });
     }
@@ -47,17 +42,29 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Obtener jugadores sancionados (Roja o Doble Amarilla en la jornada anterior)
-    const { data: sanctionedEvents } = await supabase
-      .from("match_events")
-      .select("player_id")
-      .eq("session_id", sessionId)
-      .in("type", ["RED_CARD", "SECOND_YELLOW"])
-      .filter("match_id", "in", (
-        supabase.from("matches").select("id").eq("matchday", week - 1).eq("season_id", seasonId)
-      ));
-    
-    const sanctionedIds = new Set(sanctionedEvents?.map(e => String(e.player_id)) || []);
+    // 3. OBTENER JUGADORES SANCIONADOS (CORRECCIÓN: Consulta en dos pasos para evitar subquery)
+    let sanctionedIds = new Set<string>();
+    if (week > 1) {
+      const { data: prevMatches } = await supabase
+        .from("matches")
+        .select("id")
+        .eq("matchday", week - 1)
+        .eq("season_id", seasonId)
+        .eq("session_id", sessionId);
+
+      const prevMatchIds = prevMatches?.map(m => m.id) || [];
+
+      if (prevMatchIds.length > 0) {
+        const { data: sanctionedEvents } = await supabase
+          .from("match_events")
+          .select("player_id")
+          .eq("session_id", sessionId)
+          .in("type", ["RED_CARD", "SECOND_YELLOW"])
+          .in("match_id", prevMatchIds);
+        
+        sanctionedEvents?.forEach(e => sanctionedIds.add(String(e.player_id)));
+      }
+    }
 
     // 4. Construcción de la consulta de partidos
     let query = supabase
@@ -100,15 +107,12 @@ export async function POST(req: Request) {
         away: allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || []
       };
 
-      // Jugadores disponibles (quitando sancionados)
       const availableHome = rosters.home.filter(p => !sanctionedIds.has(String(p.id)));
       const availableAway = rosters.away.filter(p => !sanctionedIds.has(String(p.id)));
 
-      // Jugadores en el campo iniciales (11)
       let activeHome = availableHome.slice(0, 11);
       let activeAway = availableAway.slice(0, 11);
       
-      // Suplentes para cambios
       let benchHome = availableHome.slice(11);
       let benchAway = availableAway.slice(11);
       
@@ -125,7 +129,7 @@ export async function POST(req: Request) {
 
           if (currentActives.length === 0) return;
 
-          // --- LÓGICA DE GOLES Y ASISTENCIAS ---
+          // LÓGICA DE GOLES
           if (Math.random() < 0.0075) {
             const scorerIdx = Math.floor(Math.random() * currentActives.length);
             const scorer = currentActives[scorerIdx];
@@ -136,7 +140,6 @@ export async function POST(req: Request) {
               player_id: scorer.id, player_name: scorer.name, session_id: sessionId
             });
 
-            // Asistencia (70%)
             if (Math.random() < 0.7 && currentActives.length > 1) {
               const otherPlayers = currentActives.filter(p => p.id !== scorer.id);
               const assistant = otherPlayers[Math.floor(Math.random() * otherPlayers.length)];
@@ -147,7 +150,7 @@ export async function POST(req: Request) {
             }
           }
 
-          // --- LÓGICA DE TARJETAS Y EXPULSIONES ---
+          // LÓGICA DE TARJETAS
           if (Math.random() < 0.002) {
             const targetIdx = Math.floor(Math.random() * currentActives.length);
             const target = currentActives[targetIdx];
@@ -180,21 +183,20 @@ export async function POST(req: Request) {
             }
           }
 
-          // --- LÓGICA DE CAMBIOS (Minuto 60 al 85) ---
+          // LÓGICA DE CAMBIOS (CORRECCIÓN: Tipo "SUBSTITUTION" para coincidir con Types)
           if (minute > 60 && minute < 85 && Math.random() < 0.01) {
             if (currentBench.length > 0 && currentActives.length > 0) {
               const playerOut = currentActives[Math.floor(Math.random() * currentActives.length)];
-              const playerIn = currentBench[0]; // Sale el primer suplente
+              const playerIn = currentBench[0];
 
               matchEvents.push({
-                match_id: match.id, team_id: teamId, type: "SUB", minute,
-                player_name: playerIn.name, // El que entra
-                assist_name: playerOut.name, // El que sale (usado para visualización)
+                match_id: match.id, team_id: teamId, type: "SUBSTITUTION", minute,
+                player_name: playerIn.name,
+                assist_name: playerOut.name,
                 player_id: playerIn.id,
                 session_id: sessionId
               });
 
-              // Actualizar listas
               if (side === "home") {
                 activeHome = [...activeHome.filter(p => p.id !== playerOut.id), playerIn];
                 benchHome = benchHome.filter(p => p.id !== playerIn.id);
@@ -207,7 +209,7 @@ export async function POST(req: Request) {
         });
       }
 
-      // --- LÓGICA DE PORTERÍA A CERO (Solo portero) ---
+      // PORTERÍA A CERO
       if (awayScore === 0) {
         const goalkeeper = availableHome.find(p => p.position === "Goalkeeper");
         if (goalkeeper) {
@@ -228,17 +230,14 @@ export async function POST(req: Request) {
       }
 
       // 7. Actualizar Match
-      const { error: updateError } = await supabase
+      await supabase
         .from("matches")
         .update({ home_goals: homeScore, away_goals: awayScore, played: true })
         .eq("id", match.id);
 
-      if (updateError) console.error(`Error match ${match.id}:`, updateError.message);
-
       // 8. Insertar Eventos
       if (matchEvents.length > 0) {
-        const { error: eventsError } = await supabase.from("match_events").insert(matchEvents);
-        if (eventsError) console.error(`Error eventos:`, eventsError.message);
+        await supabase.from("match_events").insert(matchEvents);
       }
     }
 
