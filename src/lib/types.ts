@@ -10,28 +10,28 @@ export interface Player {
   name: string;
   position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward';
   country?: string;
-  nationality?: string; // Añadido para consistencia con la DB
+  nationality?: string; // Añadido para consistencia con la DB y el buscador
   face_url?: string;
-  image_url?: string | null; // Añadido para compatibilidad con el buscador
+  image_url?: string | null; // Añadido para compatibilidad con componentes de UI
   team_id?: number | string;
 
-  /** ⭐ MEDIA ACTUAL (calculada) */
+  /** ⭐ MEDIA ACTUAL (calculada o base) */
   rating: number;
 
   /** ⭐ HISTORIAL DE VALORACIONES POR PARTIDO */
   matchRatings?: {
     season: number;
     week: number;
-    rating: number; // 1–10
+    rating: number; // Valoración de rendimiento 1.0 – 10.0
   }[];
 
   /** 🟥🟨 DISCIPLINA / SANCIONES */
   disciplinary?: {
-    yellowAccumulated: number;     // acumuladas en la temporada
-    suspendedUntilWeek?: number;   // semana hasta la que está sancionado
+    yellowAccumulated: number;     // Tarjetas acumuladas en la temporada
+    suspendedUntilWeek?: number;   // Jornada hasta la que está sancionado
   };
 
-  /** ⭐ ESTADÍSTICAS DEL JUGADOR (Opcional para evitar errores stats undefined) */
+  /** ⭐ ESTADÍSTICAS DEL JUGADOR */
   stats?: {
     goals: number;
     assists: number;
@@ -62,7 +62,7 @@ export interface Team {
   division_id: number;
   divisionName?: string;
 
-  /** ⭐ ESTADÍSTICAS ACUMULADAS (Cálculo dinámico en Contexto) */
+  /** ⭐ ESTADÍSTICAS ACUMULADAS (Cálculo dinámico) */
   stats?: {
     wins: number;
     draws: number;
@@ -89,7 +89,10 @@ export interface MatchEvent {
   match_id: number | string;
   player_id: number | string;
   team_id: number | string;
-  // CORRECCIÓN: Añadido 'SUB' para compatibilidad y 'CLEAN_SHEET'
+  /** * 'SUB' se usa para simplificar la lógica de cambios en la API.
+   * 'CLEAN_SHEET' permite registrar el rendimiento defensivo.
+   * 'SECOND_YELLOW' gestiona la expulsión por doble amonestación.
+   */
   type: 'GOAL' | 'ASSIST' | 'YELLOW_CARD' | 'RED_CARD' | 'SECOND_YELLOW' | 'SUBSTITUTION' | 'SUB' | 'CLEAN_SHEET';
   minute: number;
   session_id?: string;
@@ -110,16 +113,16 @@ export interface MatchEvent {
 export interface MatchResult {
   id: number | string;
   
-  /** ⚡ REQUERIDO: season_id para coincidir con int4 en DB */
-  season_id?: number | string; 
+  /** ⚡ REQUERIDO: season_id para coincidir con la DB */
+  season_id: number | string; 
   
-  /** Campos adicionales para lógica de UI y compatibilidad */
+  /** Campos adicionales para compatibilidad con UI */
   season?: number;
-  round?: number;
-  week?: number;
+  round?: number; // Usado para identificar la jornada en la UI
+  matchday: number; // Valor real en la base de datos (int4)
 
-  home_team: number | string; // int4 en DB
-  away_team: number | string; // int4 en DB
+  home_team: number | string;
+  away_team: number | string;
 
   home_goals: number;
   away_goals: number;
@@ -127,8 +130,8 @@ export interface MatchResult {
   played: boolean;
   division_id: number;
 
-  competition?: string;
-  session_id?: string; // text en DB
+  competition?: string; // Ej: "League", "Tournament"
+  session_id: string; // Identificador único del usuario/sesión
 
   mvpId?: number | string;
   events?: MatchEvent[];
@@ -139,7 +142,6 @@ export interface MatchResult {
 export interface TeamOfTheWeekPlayer extends Player {
   teamName: string;
   teamLogoUrl?: string;
-  teamDataAiHint?: string;
 }
 
 /* ===================== CONTEXT ===================== */
@@ -157,7 +159,7 @@ export interface LeagueContextType {
 
   /* ===== TEMPORADA ===== */
   season: number;
-  nextSeason: () => void;
+  nextSeason: () => Promise<void>;
 
   /* ===== TEAMS ===== */
   addTeam: (team: Team) => void;
@@ -210,7 +212,7 @@ export interface LeagueContextType {
   ) => Promise<void>;
 
   /* ===== DATA ===== */
-  resetLeagueData: () => void;
+  resetLeagueData: () => Promise<void>;
   importLeagueData: (newData: any) => boolean;
   refreshData: () => Promise<void>;
 }

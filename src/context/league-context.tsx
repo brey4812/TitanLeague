@@ -327,22 +327,48 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     getPlayerById: (id) => processedTeams.flatMap(t => t.roster || []).find(p => String(p.id) === String(id)),
     getTeamByPlayerId: (pid) => processedTeams.find(t => (t.roster || []).some(p => String(p.id) === String(pid))),
     simulateMatchday: async () => {
-      // Buscamos el primer partido NO jugado para determinar la jornada
+      // 1. Buscamos el partido NO jugado
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) {
         alert("No hay más jornadas para simular.");
         return;
       }
       
-      const week = nextMatch.round || 1;
+      // 2. Extraemos valores asegurando que no sean nulos
+      const weekValue = nextMatch.round || nextMatch.matchday || 1;
+      const seasonValue = currentSeasonId;
+      const sessionValue = sessionId;
+
+      // 3. Validación de seguridad para evitar Error 400
+      if (!weekValue || !seasonValue || !sessionValue) {
+        console.error("Faltan parámetros críticos detectados en el Context:", { weekValue, seasonValue, sessionValue });
+        alert("Error de sincronización: No se pudo detectar la temporada o sesión actual. Recarga la página.");
+        return;
+      }
       
-      await fetch("/api/match/simulate-matchday", { 
-        // Cambiado divisionId a Number para evitar errores de tipo
-        method: "POST", 
-        headers: { "Content-Type": "application/json" }, 
-        body: JSON.stringify({ divisionId: Number(nextMatch.division_id), week, sessionId, seasonId: currentSeasonId }) 
-      });
-      await refreshData();
+      // 4. Petición a la API con parámetros verificados
+      try {
+        const res = await fetch("/api/match/simulate-matchday", { 
+          method: "POST", 
+          headers: { "Content-Type": "application/json" }, 
+          body: JSON.stringify({ 
+            divisionId: Number(nextMatch.division_id), 
+            week: Number(weekValue), 
+            sessionId: String(sessionValue), 
+            seasonId: Number(seasonValue) 
+          }) 
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || "Fallo en el servidor");
+        }
+
+        await refreshData();
+      } catch (err: any) {
+        console.error("Error al simular:", err.message);
+        alert(`Error al simular la jornada: ${err.message}`);
+      }
     },
     getMatchEvents: (id) => matchEvents.filter(e => String(e.match_id) === String(id)).map(e => ({ ...e, playerName: (e as any).player_name || e.playerName, assistName: (e as any).assist_name || e.assistName })),
     getTeamOfTheWeek: (w) => {
