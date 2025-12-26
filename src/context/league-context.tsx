@@ -305,7 +305,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (!seasonValue || !sessionId) {
-        alert("Error: No se encontró una temporada activa. Por favor, recarga la página.");
+        alert("Error: No se encontró una temporada activa o sesión. Por favor, recarga la página.");
         return;
       }
 
@@ -316,8 +316,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           body: JSON.stringify({ 
             divisionId: Number(nextMatch.division_id), 
             week: Number(nextMatch.matchday || 1), 
-            session: String(sessionId), // Corregido: de sessionId a session
-            season: Number(seasonValue) // Corregido: de seasonId a season
+            session: String(sessionId), 
+            season: Number(seasonValue) 
           }) 
         });
 
