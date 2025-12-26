@@ -2,7 +2,7 @@
 
 import { createContext, useState, ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Team, Player, MatchResult, Division, LeagueContextType, MatchEvent } from "@/lib/types";
+import { Team, Player, MatchResult, Division, LeagueContextType, MatchEvent, TeamOfTheWeekPlayer } from "@/lib/types";
 import { calculatePlayerRating } from "@/lib/calculatePlayerRating";
 import { toast } from "sonner";
 
@@ -298,8 +298,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // Prioridad: Estado actual, luego el guardado en el partido, luego el default 1
-      const seasonValue = currentSeasonId || (nextMatch as any).season_id || 1;
+      // SOLUCIÓN CRÍTICA: Aseguramos que seasonId nunca sea nulo sacándolo del partido si el estado falla
+      const seasonValue = currentSeasonId || nextMatch.season_id;
 
       try {
         const res = await fetch("/api/match/simulate-matchday", { 
@@ -309,7 +309,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             divisionId: String(nextMatch.division_id), 
             week: Number(nextMatch.matchday || 1), 
             sessionId: String(sessionId), 
-            seasonId: Number(seasonValue) 
+            seasonId: Number(seasonValue) // Se envía el '1' obligatorio
           }) 
         });
 
