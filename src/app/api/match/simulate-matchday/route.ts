@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    // CORRECCIÓN: Aceptamos tanto session como sessionId, y season como seasonId
+    // --- NORMALIZACIÓN DE PARÁMETROS PARA EVITAR ERROR 400 ---
     const week = body.week;
     const sessionId = body.session || body.sessionId;
     const seasonId = body.season || body.seasonId;
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ 
         ok: false, 
         error: "Faltan parámetros críticos (week, session o season)",
-        received: { week, sessionId, seasonId } // Ayuda a debuguear
+        received: { week, sessionId, seasonId } // Ayuda a debuguear en la consola
       }, { status: 400 });
     }
 
