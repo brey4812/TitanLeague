@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     // 3. OBTENER JUGADORES SANCIONADOS (CORRECCIÓN: Se separó la consulta para evitar error de subquery)
     let sanctionedIds = new Set<string>();
     if (week > 1) {
-      // Primero obtenemos los IDs de los partidos de la jornada anterior
+      // Primero obtenemos los IDs de los partidos de la jornada anterior de forma real
       const { data: prevMatches } = await supabase
         .from("matches")
         .select("id")
