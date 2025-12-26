@@ -2,7 +2,7 @@
 
 import { createContext, useState, ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Team, Player, MatchResult, Division, LeagueContextType, MatchEvent, TeamOfTheWeekPlayer } from "@/lib/types";
+import { Team, Player, MatchResult, Division, LeagueContextType, MatchEvent } from "@/lib/types";
 import { calculatePlayerRating } from "@/lib/calculatePlayerRating";
 import { toast } from "sonner";
 
@@ -298,18 +298,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // Buscamos el ID con prioridad: Estado actual o el guardado en el partido
-      let seasonValue = currentSeasonId || (nextMatch as any).season_id;
-      
-      if (!seasonValue) {
-        const { data: activeSeason } = await supabase.from('seasons').select('id').eq('is_active', true).maybeSingle();
-        if (activeSeason) seasonValue = activeSeason.id;
-      }
-
-      if (!seasonValue || !sessionId) {
-        alert("Error: No se detectó la temporada o sesión. Recarga la página.");
-        return;
-      }
+      // Prioridad: Estado actual, luego el guardado en el partido, luego el default 1
+      const seasonValue = currentSeasonId || (nextMatch as any).season_id || 1;
 
       try {
         const res = await fetch("/api/match/simulate-matchday", { 
@@ -317,7 +307,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           headers: { "Content-Type": "application/json" }, 
           body: JSON.stringify({ 
             divisionId: String(nextMatch.division_id), 
-            week: Number(nextMatch.matchday || 1), // Aseguramos que use matchday
+            week: Number(nextMatch.matchday || 1), 
             sessionId: String(sessionId), 
             seasonId: Number(seasonValue) 
           }) 
@@ -329,6 +319,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         }
 
         await refreshData();
+        toast.success(`Jornada simulada.`);
       } catch (err: any) {
         alert(`Error: ${err.message}`);
       }
@@ -356,10 +347,15 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     drawTournament: async (n) => { console.log("Sorteando torneo:", n); }, 
     resetLeagueData: async () => { 
       if(confirm("¿Resetear todos los datos?")) { 
-        await supabase.from('match_events').delete().eq('session_id', sessionId);
-        await supabase.from('matches').delete().eq('session_id', sessionId);
-        localStorage.clear(); 
-        window.location.reload(); 
+        try {
+          await supabase.from('match_events').delete().eq('session_id', sessionId);
+          await supabase.from('matches').delete().eq('session_id', sessionId);
+          localStorage.clear(); 
+          window.location.reload(); 
+        } catch (error) {
+          console.error(error);
+          toast.error("Error al limpiar base de datos.");
+        }
       } 
     },
     importLeagueData: (newData) => { localStorage.setItem('league_active_teams', JSON.stringify(newData)); setTeams(newData); return true; },
