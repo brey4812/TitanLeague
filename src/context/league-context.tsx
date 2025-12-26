@@ -60,7 +60,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
       
       if (matchesRes.data) {
-        // Aseguramos que round y matchday existan para evitar errores de envío
         const normalized = matchesRes.data.map(m => ({
           ...m,
           round: m.matchday || 1
@@ -292,12 +291,11 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // Forzamos que los valores sean números reales y existan
       const seasonValue = currentSeasonId;
-      const weekValue = nextMatch.round || nextMatch.matchday;
+      const weekValue = nextMatch.matchday || nextMatch.round || 1;
 
       if (!seasonValue || !sessionId) {
-        toast.error("Datos incompletos. Intenta recargar.");
+        toast.error("Faltan parámetros críticos de sesión o temporada.");
         return;
       }
 
@@ -321,6 +319,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         await refreshData();
         toast.success("Jornada simulada.");
       } catch (err: any) {
+        console.error("Error Sim:", err.message);
         toast.error(`Error: ${err.message}`);
       }
     },
@@ -351,14 +350,15 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     drawTournament: async (n) => { console.log("Sorteando:", n); }, 
 
     resetLeagueData: async () => { 
-      if(confirm("¿Resetear todos los datos?")) { 
+      if(confirm("¿Resetear todos los datos de esta sesión?")) { 
         try {
           await supabase.from('match_events').delete().eq('session_id', sessionId);
           await supabase.from('matches').delete().eq('session_id', sessionId);
           localStorage.clear(); 
           window.location.reload(); 
         } catch (error) {
-          toast.error("Error al limpiar.");
+          console.error(error);
+          toast.error("Error al limpiar base de datos.");
         }
       } 
     },
