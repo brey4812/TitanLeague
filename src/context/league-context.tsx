@@ -316,8 +316,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           body: JSON.stringify({ 
             divisionId: Number(nextMatch.division_id), 
             week: Number(nextMatch.matchday || 1), 
-            sessionId: String(sessionId), 
-            seasonId: Number(seasonValue) 
+            session: String(sessionId), // Corregido: de sessionId a session
+            season: Number(seasonValue) // Corregido: de seasonId a season
           }) 
         });
 
