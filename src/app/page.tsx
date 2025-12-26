@@ -18,32 +18,42 @@ export default function DashboardPage() {
     getTeamById,
     lastPlayedWeek,
     getMatchEvents,
-    season,
+    season, // Este es el número de temporada (1, 2...)
     nextSeason,
   } = useContext(LeagueContext);
 
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
 
   /* =======================
-      SANEAMIENTO Y LÓGICA GLOBAL
-      ======================= */
+      SANEAMIENTO Y LÓGICA GLOBAL CORREGIDA
+     ======================= */
   const safeTeams = useMemo(() => (Array.isArray(teams) ? teams : []), [teams]);
   const safeMatches = useMemo(() => (Array.isArray(matches) ? matches : []), [matches]);
+  
+  // Usamos el valor que viene del contexto para filtrar
   const currentSeasonNum = Number(season || 1);
 
+  // CORRECCIÓN: Filtrar partidos usando season_id para coincidir con la DB
   const isGlobalSeasonFinished = useMemo(() => {
     if (!isLoaded || safeMatches.length === 0) return false;
+    
     const currentSeasonMatches = safeMatches.filter(
-      (m) => m.competition === "League" && Number(m.season_id || m.season) === currentSeasonNum
+      (m) => m.competition === "League" && 
+      (Number(m.season_id) === currentSeasonNum || Number(m.season) === currentSeasonNum)
     );
+    
     if (currentSeasonMatches.length === 0) return false;
     return currentSeasonMatches.every((m) => m.played === true);
   }, [safeMatches, currentSeasonNum, isLoaded]);
 
+  // CORRECCIÓN: Cálculo de goles filtrando correctamente por la temporada activa
   const totalGoals = useMemo(() => {
     if (!isLoaded) return 0;
     return safeMatches
-      .filter((m) => m.played && Number(m.season_id || m.season) === currentSeasonNum)
+      .filter((m) => 
+        m.played && 
+        (Number(m.season_id) === currentSeasonNum || Number(m.season) === currentSeasonNum)
+      )
       .reduce((sum, m) => sum + (Number(m.home_goals) || 0) + (Number(m.away_goals) || 0), 0);
   }, [safeMatches, currentSeasonNum, isLoaded]);
 
@@ -62,13 +72,13 @@ export default function DashboardPage() {
     { title: "Goles (Temp)", value: totalGoals, icon: <Goal className="h-5 w-5 text-red-600" /> },
   ];
 
-  // Función auxiliar para iconos de eventos estilo "LiveScore"
   const getEventIcon = (type: string) => {
     switch (type) {
       case "GOAL": return <div className="w-4 h-4 bg-slate-900 rounded-full flex items-center justify-center text-[10px] text-white shadow-sm">⚽</div>;
       case "YELLOW_CARD": return <div className="w-3 h-4 bg-yellow-400 rounded-sm border border-yellow-500 shadow-sm" />;
       case "RED_CARD":
       case "SECOND_YELLOW": return <div className="w-3 h-4 bg-red-500 rounded-sm border border-red-600 shadow-sm" />;
+      case "SUBSTITUTION":
       case "SUB": return (
         <div className="flex flex-col -space-y-1">
           <ArrowUpRight className="w-3 h-3 text-emerald-500" />
@@ -130,7 +140,6 @@ export default function DashboardPage() {
 
       <DashboardClient onMatchClick={setSelectedMatch} />
 
-      {/* MODAL DE DETALLES DEL PARTIDO CORREGIDO (ESTILO LIVE-SCORE) */}
       {selectedMatch && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-md transition-all">
           <Card className="max-w-xl w-full relative shadow-2xl border-2 border-slate-800 animate-in zoom-in-95 duration-200">
@@ -167,16 +176,19 @@ export default function DashboardPage() {
                   .sort((a, b) => Number(a.minute) - Number(b.minute))
                   .map((event) => {
                     const isHome = String(event.team_id) === String(selectedMatch.home_team);
+                    // Normalización de nombres para mostrar en UI
+                    const pName = event.playerName || event.player_name;
+                    const aName = event.assistName || event.assist_name;
 
                     return (
-                      <div key={event.id} className="grid grid-cols-3 items-center py-4 px-2 hover:bg-slate-50/50 transition-colors">
+                      <div key={event.id || Math.random()} className="grid grid-cols-3 items-center py-4 px-2 hover:bg-slate-50/50 transition-colors">
                         {/* Lado Local */}
                         <div className={`flex items-center gap-3 ${isHome ? "justify-end" : "invisible"}`}>
                            <div className="flex flex-col items-end">
-                              <span className="text-sm font-black text-slate-800 leading-none">{event.playerName}</span>
-                              {(event.assistName || event.type === 'SUB') && (
+                              <span className="text-sm font-black text-slate-800 leading-none">{pName}</span>
+                              {(aName || event.type === 'SUBSTITUTION' || event.type === 'SUB') && (
                                 <span className="text-[10px] font-bold text-slate-400 truncate max-w-[120px]">
-                                  {event.type === 'SUB' ? `por ${event.assistName}` : `Asist: ${event.assistName}`}
+                                  { (event.type === 'SUBSTITUTION' || event.type === 'SUB') ? `por ${aName}` : `Asist: ${aName}`}
                                 </span>
                               )}
                            </div>
@@ -194,10 +206,10 @@ export default function DashboardPage() {
                         <div className={`flex items-center gap-3 ${!isHome ? "justify-start" : "invisible"}`}>
                            {getEventIcon(event.type)}
                            <div className="flex flex-col items-start">
-                              <span className="text-sm font-black text-slate-800 leading-none">{event.playerName}</span>
-                              {(event.assistName || event.type === 'SUB') && (
+                              <span className="text-sm font-black text-slate-800 leading-none">{pName}</span>
+                              {(aName || event.type === 'SUBSTITUTION' || event.type === 'SUB') && (
                                 <span className="text-[10px] font-bold text-slate-400 truncate max-w-[120px]">
-                                  {event.type === 'SUB' ? `por ${event.assistName}` : `Asist: ${event.assistName}`}
+                                  {(event.type === 'SUBSTITUTION' || event.type === 'SUB') ? `por ${aName}` : `Asist: ${aName}`}
                                 </span>
                               )}
                            </div>
