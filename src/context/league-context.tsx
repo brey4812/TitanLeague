@@ -2,8 +2,9 @@
 
 import { createContext, useState, ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Team, Player, MatchResult, Division, LeagueContextType, MatchEvent } from "@/lib/types";
+import { Team, Player, MatchResult, Division, LeagueContextType, MatchEvent, TeamOfTheWeekPlayer } from "@/lib/types";
 import { calculatePlayerRating } from "@/lib/calculatePlayerRating";
+import { toast } from "sonner";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -185,7 +186,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (allMatches.length > 0) {
-        const { data, error } = await supabase.from('matches').insert(allMatches).select();
+        const { data } = await supabase.from('matches').insert(allMatches).select();
         if (data) {
           const normalizedNew = data.map(m => ({ ...m, round: m.matchday }));
           setMatches(prev => {
@@ -204,7 +205,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   const isSeasonFinished = useMemo(() => {
     if (!isLoaded || matches.length === 0) return false;
-    const leagueMatches = matches.filter(m => m.competition === "League" && String(m.season_id) === String(currentSeasonId));
+    const leagueMatches = matches.filter(m => m.competition === "League" && Number(m.season_id) === currentSeasonId);
     if (leagueMatches.length === 0) return false;
     return leagueMatches.every(m => m.played === true);
   }, [matches, isLoaded, currentSeasonId]);
@@ -214,11 +215,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
-      const teamMatches = matches.filter(m => 
-        m.played && 
-        String(m.season_id) === String(currentSeasonId) && 
-        (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id))
-      );
+      const teamMatches = matches.filter(m => m.played && Number(m.season_id) === currentSeasonId && (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id)));
       
       teamMatches.forEach(m => {
         const isHome = String(m.home_team) === String(team.id);
@@ -248,7 +245,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           stats: { ...playerStats, goals: pEvents.filter(e => e.type === 'GOAL').length, assists: pAssists.length }
         };
       });
-
       return { ...team, stats, points: stats.points, roster: updatedRoster };
     });
   }, [teams, matches, matchEvents, currentSeasonId, isLoaded]);
@@ -264,10 +260,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     season: currentSeason,
     isSeasonFinished,
     nextSeason: async () => {
-      if (currentSeason >= 10) { alert("Has alcanzado el límite máximo de 10 temporadas."); return; }
-      const confirmMsg = isSeasonFinished 
-        ? "¡Temporada terminada! ¿Deseas aplicar ascensos/descensos?" 
-        : "Aún quedan partidos. ¿Forzar cierre?";
+      if (currentSeason >= 10) { alert("Límite de 10 temporadas alcanzado."); return; }
+      const confirmMsg = isSeasonFinished ? "¿Iniciar nueva temporada?" : "¿Forzar cierre?";
       if (!confirm(confirmMsg)) return;
       
       const updatedTeams = applyPromotionsAndRelegations(processedTeams);
@@ -297,20 +291,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // Forzamos la búsqueda del seasonId actual si currentSeasonId es null
       let seasonValue = currentSeasonId;
-      
       if (!seasonValue) {
-        const { data: activeSeason } = await supabase
-          .from('seasons')
-          .select('id')
-          .eq('is_active', true)
-          .maybeSingle();
+        const { data: activeSeason } = await supabase.from('seasons').select('id').eq('is_active', true).maybeSingle();
         if (activeSeason) seasonValue = activeSeason.id;
       }
 
-      if (!seasonValue) {
-        alert("Error: No se encontró una temporada activa. Por favor, recarga la página.");
+      if (!seasonValue || !sessionId) {
+        toast.error("Faltan parámetros críticos de sesión o temporada.");
         return;
       }
 
@@ -321,7 +309,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           body: JSON.stringify({ 
             divisionId: Number(nextMatch.division_id), 
             week: Number(nextMatch.round || nextMatch.matchday || 1), 
-            sessionId: sessionId, 
+            sessionId: String(sessionId), 
             seasonId: Number(seasonValue) 
           }) 
         });
@@ -333,7 +321,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
         await refreshData();
       } catch (err: any) {
-        alert(`Error: ${err.message}`);
+        toast.error(`Error: ${err.message}`);
       }
     },
 
@@ -344,21 +332,26 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             playerName: e.player_name || e.playerName, 
             assistName: e.assist_name || e.assistName 
         })),
+
     getTeamOfTheWeek: (w) => {
       const weekM = matches.filter(m => m.round === w && m.played);
       const candidates = processedTeams.flatMap(t => t.roster || []).filter(p => weekM.some(m => String(m.home_team) === String(p.team_id) || String(m.away_team) === String(p.team_id)));
       return candidates.sort((a,b) => b.rating - a.rating).slice(0, 11) as any;
     },
+    
     getBestEleven: (t, v) => [],
     lastPlayedWeek: matches.filter(m => m.played).length === 0 ? 1 : Math.max(...matches.filter(m => m.played).map(m => Number(m.round || 0))),
+    
     getLeagueQualifiers: (divId) => {
       const sorted = processedTeams.filter(t => t.division_id === divId).sort((a,b) => (b.points || 0) - (a.points || 0));
       return { titanPeak: sorted.slice(0, 4), colossusShield: sorted.slice(4, 8) };
     },
+    
     getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
-    drawTournament: async (n) => { console.log("Sorteando torneo:", n); }, 
+    drawTournament: async (n) => { console.log("Sorteando:", n); }, 
+
     resetLeagueData: async () => { 
-      if(confirm("¿Resetear todos los datos?")) { 
+      if(confirm("¿Resetear todos los datos de esta sesión?")) { 
         await supabase.from('match_events').delete().eq('session_id', sessionId);
         await supabase.from('matches').delete().eq('session_id', sessionId);
         localStorage.clear(); 
