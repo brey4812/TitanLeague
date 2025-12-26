@@ -83,7 +83,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [teams, isLoaded]);
 
-  // --- LÓGICA DE ASCENSOS Y DESCENSOS ---
   const applyPromotionsAndRelegations = useCallback((currentTeams: Team[]) => {
     const teamsByDiv: Record<number, Team[]> = { 1: [], 2: [], 3: [], 4: [] };
     currentTeams.forEach(t => { 
@@ -119,7 +118,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  // --- MOTOR DE CALENDARIO DINÁMICO ---
   const autoMatchmaker = useCallback(async () => {
     if (!isLoaded || teams.length < 2 || !sessionId || !currentSeasonId) return;
 
@@ -166,7 +164,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             allMatches.push({
               home_team: Number(home.id),
               away_team: Number(away.id),
-              matchday: j + 1, // Usamos la columna correcta de tu DB
+              matchday: j + 1, // Columna real en DB
               played: false,
               division_id: div.id,
               competition: "League",
@@ -286,8 +284,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     players: processedTeams.flatMap(t => t.roster || []),
     isLoaded,
     sessionId,
-    season: currentSeason,
     isSeasonFinished,
+    season: currentSeason,
     nextSeason: async () => {
       const confirmMsg = isSeasonFinished 
         ? "¡Temporada terminada! ¿Deseas aplicar ascensos/descensos e iniciar la nueva temporada?"
