@@ -43,8 +43,20 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshData = useCallback(async () => {
     try {
-      const savedTeams = localStorage.getItem('league_active_teams');
-      if (savedTeams) setTeams(JSON.parse(savedTeams));
+      const savedTeamsRaw = localStorage.getItem('league_active_teams');
+      if (savedTeamsRaw) {
+        let parsedTeams: Team[] = JSON.parse(savedTeamsRaw);
+        
+        // --- AUTO-MIGRACIÓN DE EQUIPOS (Para que vuelvan a aparecer) ---
+        const migratedTeams = parsedTeams.map(t => {
+          if (t.division_id === 1) return { ...t, division_id: 5 };
+          if (t.division_id === 2) return { ...t, division_id: 6 };
+          if (t.division_id === 3) return { ...t, division_id: 7 };
+          if (t.division_id === 4) return { ...t, division_id: 8 };
+          return t;
+        });
+        setTeams(migratedTeams);
+      }
       
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
         supabase.from('matches')
@@ -100,7 +112,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       if (idx !== -1) newTeams[idx].division_id = newDiv;
     };
 
-    // Ajuste de lógica de ascenso/descenso con los nuevos IDs
     if (teamsByDiv[5].length >= 4) teamsByDiv[5].slice(-2).forEach(t => move(t.id, 6));
     if (teamsByDiv[6].length >= 2) teamsByDiv[6].slice(0, 2).forEach(t => move(t.id, 5));
     if (teamsByDiv[6].length >= 6) teamsByDiv[6].slice(-2).forEach(t => move(t.id, 7));
@@ -300,7 +311,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // AJUSTE: Paracaídas de seguridad para IDs. Buscamos el seasonId si no está en el estado.
       let seasonValue = currentSeasonId || (nextMatch as any).season_id;
       
       if (!seasonValue) {
@@ -308,7 +318,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         if (activeSeason) seasonValue = activeSeason.id;
       }
 
-      // AJUSTE: Buscamos el leagueId real de tu tabla (ID 1)
       const { data: leagueData } = await supabase.from('leagues').select('id').limit(1).single();
       const leagueIdToSend = (nextMatch as any).league_id || (leagueData ? leagueData.id : 1);
 
@@ -325,7 +334,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             divisionId: String(nextMatch.division_id), 
             week: Number(nextMatch.matchday || 1), 
             sessionId: String(sessionId), 
-            seasonId: Number(seasonValue), // Ahora se envía el seasonId correctamente
+            seasonId: Number(seasonValue),
             leagueId: Number(leagueIdToSend)
           }) 
         });

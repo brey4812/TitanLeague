@@ -18,14 +18,13 @@ export async function POST(req: Request) {
     const body = await req.json();
     
     // --- NORMALIZACIÓN DEFINITIVA ---
-    // Aceptamos ambos formatos para que no importe cómo se envíe desde el frontend
     const week = Number(body.week);
     const sessionId = String(body.sessionId || body.session);
     let seasonId = Number(body.seasonId || body.season);
     const divisionId = body.divisionId;
-    const leagueId = Number(body.leagueId || 1); // Tomamos el ID 1 de "Titan League" si no viene
+    const leagueId = Number(body.leagueId || 1); 
 
-    // --- AUTO-RECUPERACIÓN DE SEASON_ID (Para evitar Error 400 si el frontend falla) ---
+    // --- AUTO-RECUPERACIÓN DE SEASON_ID ---
     if (!seasonId) {
       const { data: activeSeason } = await supabase
         .from('seasons')
@@ -36,7 +35,7 @@ export async function POST(req: Request) {
       if (activeSeason) {
         seasonId = activeSeason.id;
       } else {
-        seasonId = 1; // Valor por defecto basado en tus tablas
+        seasonId = 1; 
       }
     }
 
@@ -123,7 +122,7 @@ export async function POST(req: Request) {
 
     // 6. Simulación de partidos
     for (const match of matches) {
-      const currentMatchEvents: any[] = []; // Array limpio para cada partido para evitar duplicados
+      const currentMatchEvents: any[] = []; 
       
       const homeRoster = allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [];
       const awayRoster = allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || [];
@@ -146,7 +145,6 @@ export async function POST(req: Request) {
 
           if (actives.length === 0) return;
 
-          // Lógica de Goles (0.75% probabilidad por minuto)
           if (Math.random() < 0.0075) {
             const scorerIdx = Math.floor(Math.random() * actives.length);
             const scorer = actives[scorerIdx];
@@ -177,7 +175,6 @@ export async function POST(req: Request) {
             }
           }
 
-          // Lógica de Tarjetas
           if (Math.random() < 0.002) {
             const targetIdx = Math.floor(Math.random() * actives.length);
             const target = actives[targetIdx];
@@ -223,7 +220,6 @@ export async function POST(req: Request) {
             }
           }
 
-          // Cambios
           if (min > 60 && min < 85 && Math.random() < 0.01 && bench.length > 0) {
             const pOut = actives[Math.floor(Math.random() * actives.length)];
             const pIn = bench[0];
@@ -250,7 +246,6 @@ export async function POST(req: Request) {
         });
       }
 
-      // Portería a cero
       if (awayGoals === 0) {
         const gk = homeRoster.find(p => p.position === "Goalkeeper");
         if (gk) currentMatchEvents.push({ match_id: match.id, team_id: match.home_team, type: "CLEAN_SHEET", minute: 90, player_id: gk.id, player_name: gk.name, session_id: sessionId });
@@ -260,7 +255,7 @@ export async function POST(req: Request) {
         if (gk) currentMatchEvents.push({ match_id: match.id, team_id: match.away_team, type: "CLEAN_SHEET", minute: 90, player_id: gk.id, player_name: gk.name, session_id: sessionId });
       }
 
-      // 7. Actualizar Partido (Asegurando league_id y IDs de temporada)
+      // 7. Actualizar Partido (Reparando league_id y marcando como jugado)
       await supabase.from("matches").update({ 
         home_goals: homeGoals, 
         away_goals: awayGoals, 
