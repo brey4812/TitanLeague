@@ -130,13 +130,11 @@ export async function POST(req: Request) {
       const homeRoster = allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [];
       const awayRoster = allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || [];
 
-      // Titulares: Filtrar sancionados y tomar máximo 11
       let activeHome = homeRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(0, 11);
       let activeAway = awayRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(0, 11);
 
-      // Banca: Jugadores restantes no sancionados
-      let benchHome = homeRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(11);
-      let benchAway = awayRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(11);
+      let benchHome = homeRoster.slice(11);
+      let benchAway = awayRoster.slice(11);
 
       const yellowCards: Record<string, number> = {};
       let homeGoals = 0;
@@ -155,11 +153,7 @@ export async function POST(req: Request) {
             const scorerIdx = Math.floor(Math.random() * actives.length);
             const scorer = actives[scorerIdx];
 
-            if (side === "home") {
-              homeGoals++;
-            } else {
-              awayGoals++;
-            }
+            if (side === "home") { homeGoals++; } else { awayGoals++; }
 
             currentMatchEvents.push({
               match_id: match.id,
@@ -171,7 +165,7 @@ export async function POST(req: Request) {
               session_id: sessionId
             });
 
-            // Lógica de Asistencias
+            // Asistencias
             if (Math.random() < 0.7 && actives.length > 1) {
               const others = actives.filter(p => p.id !== scorer.id);
               const asst = others[Math.floor(Math.random() * others.length)];
@@ -194,7 +188,6 @@ export async function POST(req: Request) {
             const target = actives[targetIdx];
 
             if (Math.random() < 0.15) {
-              // Roja directa
               currentMatchEvents.push({
                 match_id: match.id,
                 team_id: teamId,
@@ -205,15 +198,10 @@ export async function POST(req: Request) {
                 session_id: sessionId
               });
 
-              if (side === "home") {
-                activeHome = activeHome.filter(p => p.id !== target.id);
-              } else {
-                activeAway = activeAway.filter(p => p.id !== target.id);
-              }
+              if (side === "home") { activeHome = activeHome.filter(p => p.id !== target.id); } 
+              else { activeAway = activeAway.filter(p => p.id !== target.id); }
             } else {
-              // Amarilla
               yellowCards[target.id] = (yellowCards[target.id] || 0) + 1;
-
               if (yellowCards[target.id] === 2) {
                 currentMatchEvents.push({
                   match_id: match.id,
@@ -224,12 +212,8 @@ export async function POST(req: Request) {
                   player_name: target.name,
                   session_id: sessionId
                 });
-
-                if (side === "home") {
-                  activeHome = activeHome.filter(p => p.id !== target.id);
-                } else {
-                  activeAway = activeAway.filter(p => p.id !== target.id);
-                }
+                if (side === "home") { activeHome = activeHome.filter(p => p.id !== target.id); } 
+                else { activeAway = activeAway.filter(p => p.id !== target.id); }
               } else {
                 currentMatchEvents.push({
                   match_id: match.id,
@@ -272,46 +256,28 @@ export async function POST(req: Request) {
         });
       }
 
-      // Lógica de Portería a Cero
+      // Portería a Cero
       if (awayGoals === 0) {
-        const gk = homeRoster.find(p => 
-          p.position?.toLowerCase().includes("goalkeeper") || 
-          p.position === "GK"
-        );
+        const gk = homeRoster.find(p => p.position?.toLowerCase().includes("goalkeeper") || p.position === "GK");
         if (gk) {
           currentMatchEvents.push({
-            match_id: match.id,
-            team_id: match.home_team,
-            type: "CLEAN_SHEET",
-            minute: 90,
-            player_id: gk.id,
-            player_name: gk.name,
-            session_id: sessionId
+            match_id: match.id, team_id: match.home_team, type: "CLEAN_SHEET", minute: 90,
+            player_id: gk.id, player_name: gk.name, session_id: sessionId
           });
         }
       }
-
       if (homeGoals === 0) {
-        const gk = awayRoster.find(p => 
-          p.position?.toLowerCase().includes("goalkeeper") || 
-          p.position === "GK"
-        );
+        const gk = awayRoster.find(p => p.position?.toLowerCase().includes("goalkeeper") || p.position === "GK");
         if (gk) {
           currentMatchEvents.push({
-            match_id: match.id,
-            team_id: match.away_team,
-            type: "CLEAN_SHEET",
-            minute: 90,
-            player_id: gk.id,
-            player_name: gk.name,
-            session_id: sessionId
+            match_id: match.id, team_id: match.away_team, type: "CLEAN_SHEET", minute: 90,
+            player_id: gk.id, player_name: gk.name, session_id: sessionId
           });
         }
       }
 
-      // 7. Actualización de Base de Datos (SINCRONIZADA)
-      // Actualizamos el marcador del partido
-      const { error: updErr } = await supabase
+      // 7. ACTUALIZACIÓN CRÍTICA: Primero actualizamos el partido
+      await supabase
         .from("matches")
         .update({
           home_goals: homeGoals,
@@ -321,21 +287,21 @@ export async function POST(req: Request) {
         })
         .eq("id", match.id);
 
-      if (updErr) console.error("Error al actualizar partido:", updErr.message);
-
-      // Insertamos todos los eventos generados para este partido
+      // LUEGO insertamos los eventos y ESPERAMOS a que termine (usando await)
       if (currentMatchEvents.length > 0) {
-        const { error: insErr } = await supabase
+        const { error: insError } = await supabase
           .from("match_events")
           .insert(currentMatchEvents);
         
-        if (insErr) console.error("Error al insertar eventos:", insErr.message);
+        if (insError) {
+          console.error(`Error en match_id ${match.id}:`, insError.message);
+        }
       }
     }
 
     return NextResponse.json({ 
       ok: true, 
-      message: `Jornada simulada con éxito.` 
+      message: `Jornada ${week} simulada con éxito.` 
     });
 
   } catch (err: any) {
