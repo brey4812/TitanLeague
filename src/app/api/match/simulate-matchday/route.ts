@@ -21,15 +21,30 @@ export async function POST(req: Request) {
     // Aceptamos ambos formatos para que no importe cómo se envíe desde el frontend
     const week = Number(body.week);
     const sessionId = String(body.sessionId || body.session);
-    const seasonId = Number(body.seasonId || body.season);
+    let seasonId = Number(body.seasonId || body.season);
     const divisionId = body.divisionId;
     const leagueId = Number(body.leagueId || 1); // Tomamos el ID 1 de "Titan League" si no viene
+
+    // --- AUTO-RECUPERACIÓN DE SEASON_ID (Para evitar Error 400 si el frontend falla) ---
+    if (!seasonId) {
+      const { data: activeSeason } = await supabase
+        .from('seasons')
+        .select('id')
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      if (activeSeason) {
+        seasonId = activeSeason.id;
+      } else {
+        seasonId = 1; // Valor por defecto basado en tus tablas
+      }
+    }
 
     // 1. Validaciones iniciales
     if (!week || !sessionId || !seasonId) {
       return NextResponse.json({ 
         ok: false, 
-        error: "Faltan parámetros críticos (week, session o season)",
+        error: "Faltan parámetros críticos (week, sessionId o seasonId)",
         received: { week, sessionId, seasonId } 
       }, { status: 400 });
     }
@@ -46,32 +61,64 @@ export async function POST(req: Request) {
         .limit(1);
 
       if (pending && pending.length > 0) {
-        return NextResponse.json({ ok: false, error: "Existen jornadas anteriores sin completar." }, { status: 400 });
+        return NextResponse.json({ 
+          ok: false, 
+          error: "Existen jornadas anteriores sin completar." 
+        }, { status: 400 });
       }
     }
 
     // 3. Obtener sancionados
     let sanctionedIds = new Set<string>();
     if (week > 1) {
-      const { data: prevM } = await supabase.from("matches").select("id").eq("matchday", week - 1).eq("season_id", seasonId).eq("session_id", sessionId);
+      const { data: prevM } = await supabase
+        .from("matches")
+        .select("id")
+        .eq("matchday", week - 1)
+        .eq("season_id", seasonId)
+        .eq("session_id", sessionId);
+
       const ids = prevM?.map(m => m.id) || [];
       if (ids.length > 0) {
-        const { data: evs } = await supabase.from("match_events").select("player_id").eq("session_id", sessionId).in("type", ["RED_CARD", "SECOND_YELLOW"]).in("match_id", ids);
+        const { data: evs } = await supabase
+          .from("match_events")
+          .select("player_id")
+          .eq("session_id", sessionId)
+          .in("type", ["RED_CARD", "SECOND_YELLOW"])
+          .in("match_id", ids);
+        
         evs?.forEach(e => sanctionedIds.add(String(e.player_id)));
       }
     }
 
     // 4. Obtener partidos
-    let query = supabase.from("matches").select("*").eq("matchday", week).eq("played", false).eq("season_id", seasonId).eq("session_id", sessionId);
+    let query = supabase
+      .from("matches")
+      .select("*")
+      .eq("matchday", week)
+      .eq("played", false)
+      .eq("season_id", seasonId)
+      .eq("session_id", sessionId);
+
     if (divisionId) query = query.eq("division_id", divisionId);
     
     const { data: matches, error: matchError } = await query;
     if (matchError) throw matchError;
-    if (!matches || matches.length === 0) return NextResponse.json({ ok: true, message: "No hay partidos pendientes." });
+
+    if (!matches || matches.length === 0) {
+      return NextResponse.json({ 
+        ok: true, 
+        message: "No hay partidos pendientes para procesar." 
+      });
+    }
 
     // 5. Obtener jugadores
     const teamIds = Array.from(new Set(matches.flatMap(m => [m.home_team, m.away_team])));
-    const { data: allPlayers, error: pError } = await supabase.from("players").select("id, team_id, name, position").in("team_id", teamIds);
+    const { data: allPlayers, error: pError } = await supabase
+      .from("players")
+      .select("id, team_id, name, position")
+      .in("team_id", teamIds);
+
     if (pError) throw pError;
 
     // 6. Simulación de partidos
@@ -83,6 +130,7 @@ export async function POST(req: Request) {
 
       let activeHome = homeRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(0, 11);
       let activeAway = awayRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(0, 11);
+      
       let benchHome = homeRoster.slice(11);
       let benchAway = awayRoster.slice(11);
       
@@ -91,7 +139,7 @@ export async function POST(req: Request) {
       let awayGoals = 0;
 
       for (let min = 1; min <= 90; min++) {
-        ["home", "away"].forEach(side => {
+        (["home", "away"] as const).forEach(side => {
           const teamId = side === "home" ? match.home_team : match.away_team;
           let actives = side === "home" ? activeHome : activeAway;
           let bench = side === "home" ? benchHome : benchAway;
@@ -100,29 +148,77 @@ export async function POST(req: Request) {
 
           // Lógica de Goles (0.75% probabilidad por minuto)
           if (Math.random() < 0.0075) {
-            const scorer = actives[Math.floor(Math.random() * actives.length)];
+            const scorerIdx = Math.floor(Math.random() * actives.length);
+            const scorer = actives[scorerIdx];
             side === "home" ? homeGoals++ : awayGoals++;
-            currentMatchEvents.push({ match_id: match.id, team_id: teamId, type: "GOAL", minute: min, player_id: scorer.id, player_name: scorer.name, session_id: sessionId });
+
+            currentMatchEvents.push({ 
+              match_id: match.id, 
+              team_id: teamId, 
+              type: "GOAL", 
+              minute: min, 
+              player_id: scorer.id, 
+              player_name: scorer.name, 
+              session_id: sessionId 
+            });
 
             if (Math.random() < 0.7 && actives.length > 1) {
-              const asst = actives.filter(p => p.id !== scorer.id)[Math.floor(Math.random() * (actives.length - 1))];
-              currentMatchEvents.push({ match_id: match.id, team_id: teamId, type: "ASSIST", minute: min, player_id: asst.id, player_name: asst.name, session_id: sessionId });
+              const otherPlayers = actives.filter(p => p.id !== scorer.id);
+              const asst = otherPlayers[Math.floor(Math.random() * otherPlayers.length)];
+              currentMatchEvents.push({ 
+                match_id: match.id, 
+                team_id: teamId, 
+                type: "ASSIST", 
+                minute: min, 
+                player_id: asst.id, 
+                player_name: asst.name, 
+                session_id: sessionId 
+              });
             }
           }
 
           // Lógica de Tarjetas
           if (Math.random() < 0.002) {
-            const target = actives[Math.floor(Math.random() * actives.length)];
-            if (Math.random() < 0.15) { // Roja directa
-              currentMatchEvents.push({ match_id: match.id, team_id: teamId, type: "RED_CARD", minute: min, player_id: target.id, player_name: target.name, session_id: sessionId });
-              if (side === "home") activeHome = activeHome.filter(p => p.id !== target.id); else activeAway = activeAway.filter(p => p.id !== target.id);
-            } else { // Amarilla
+            const targetIdx = Math.floor(Math.random() * actives.length);
+            const target = actives[targetIdx];
+            const isRed = Math.random() < 0.15;
+
+            if (isRed) {
+              currentMatchEvents.push({ 
+                match_id: match.id, 
+                team_id: teamId, 
+                type: "RED_CARD", 
+                minute: min, 
+                player_id: target.id, 
+                player_name: target.name, 
+                session_id: sessionId 
+              });
+              if (side === "home") activeHome = activeHome.filter(p => p.id !== target.id); 
+              else activeAway = activeAway.filter(p => p.id !== target.id);
+            } else {
               yellowCards[target.id] = (yellowCards[target.id] || 0) + 1;
               if (yellowCards[target.id] === 2) {
-                currentMatchEvents.push({ match_id: match.id, team_id: teamId, type: "SECOND_YELLOW", minute: min, player_id: target.id, player_name: target.name, session_id: sessionId });
-                if (side === "home") activeHome = activeHome.filter(p => p.id !== target.id); else activeAway = activeAway.filter(p => p.id !== target.id);
+                currentMatchEvents.push({ 
+                  match_id: match.id, 
+                  team_id: teamId, 
+                  type: "SECOND_YELLOW", 
+                  minute: min, 
+                  player_id: target.id, 
+                  player_name: target.name, 
+                  session_id: sessionId 
+                });
+                if (side === "home") activeHome = activeHome.filter(p => p.id !== target.id); 
+                else activeAway = activeAway.filter(p => p.id !== target.id);
               } else {
-                currentMatchEvents.push({ match_id: match.id, team_id: teamId, type: "YELLOW_CARD", minute: min, player_id: target.id, player_name: target.name, session_id: sessionId });
+                currentMatchEvents.push({ 
+                  match_id: match.id, 
+                  team_id: teamId, 
+                  type: "YELLOW_CARD", 
+                  minute: min, 
+                  player_id: target.id, 
+                  player_name: target.name, 
+                  session_id: sessionId 
+                });
               }
             }
           }
@@ -131,9 +227,25 @@ export async function POST(req: Request) {
           if (min > 60 && min < 85 && Math.random() < 0.01 && bench.length > 0) {
             const pOut = actives[Math.floor(Math.random() * actives.length)];
             const pIn = bench[0];
-            currentMatchEvents.push({ match_id: match.id, team_id: teamId, type: "SUBSTITUTION", minute: min, player_id: pIn.id, player_name: pIn.name, assist_name: pOut.name, session_id: sessionId });
-            if (side === "home") { activeHome = [...activeHome.filter(p => p.id !== pOut.id), pIn]; benchHome = benchHome.slice(1); } 
-            else { activeAway = [...activeAway.filter(p => p.id !== pOut.id), pIn]; benchAway = benchAway.slice(1); }
+            
+            currentMatchEvents.push({ 
+              match_id: match.id, 
+              team_id: teamId, 
+              type: "SUBSTITUTION", 
+              minute: min, 
+              player_id: pIn.id, 
+              player_name: pIn.name, 
+              assist_name: pOut.name, 
+              session_id: sessionId 
+            });
+
+            if (side === "home") { 
+              activeHome = [...activeHome.filter(p => p.id !== pOut.id), pIn]; 
+              benchHome = benchHome.slice(1); 
+            } else { 
+              activeAway = [...activeAway.filter(p => p.id !== pOut.id), pIn]; 
+              benchAway = benchAway.slice(1); 
+            }
           }
         });
       }
@@ -148,12 +260,12 @@ export async function POST(req: Request) {
         if (gk) currentMatchEvents.push({ match_id: match.id, team_id: match.away_team, type: "CLEAN_SHEET", minute: 90, player_id: gk.id, player_name: gk.name, session_id: sessionId });
       }
 
-      // 7. Actualizar Partido (Asegurando league_id) y Guardar Eventos
+      // 7. Actualizar Partido (Asegurando league_id y IDs de temporada)
       await supabase.from("matches").update({ 
         home_goals: homeGoals, 
         away_goals: awayGoals, 
         played: true,
-        league_id: leagueId // Reparamos el NULL durante la simulación
+        league_id: leagueId 
       }).eq("id", match.id);
 
       if (currentMatchEvents.length > 0) {

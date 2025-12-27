@@ -33,11 +33,12 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return '';
   });
 
+  // AJUSTE: Sincronización con los IDs reales de tu tabla 'divisions' (5, 6, 7, 8)
   const divisions: Division[] = [
-    { id: 1, name: "Primera División" },
-    { id: 2, name: "Segunda División" },
-    { id: 3, name: "Tercera División" },
-    { id: 4, name: "Cuarta División" }
+    { id: 5, name: "Titan Prime Division" },
+    { id: 6, name: "Second Division" },
+    { id: 7, name: "Third Division" },
+    { id: 8, name: "Fourth Division" }
   ];
 
   const refreshData = useCallback(async () => {
@@ -84,7 +85,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   }, [teams, isLoaded]);
 
   const applyPromotionsAndRelegations = useCallback((currentTeams: Team[]) => {
-    const teamsByDiv: Record<number, Team[]> = { 1: [], 2: [], 3: [], 4: [] };
+    const teamsByDiv: Record<number, Team[]> = { 5: [], 6: [], 7: [], 8: [] };
     currentTeams.forEach(t => { 
       if (teamsByDiv[t.division_id]) teamsByDiv[t.division_id].push(t); 
     });
@@ -99,12 +100,13 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       if (idx !== -1) newTeams[idx].division_id = newDiv;
     };
 
-    if (teamsByDiv[1].length >= 4) teamsByDiv[1].slice(-2).forEach(t => move(t.id, 2));
-    if (teamsByDiv[2].length >= 2) teamsByDiv[2].slice(0, 2).forEach(t => move(t.id, 1));
-    if (teamsByDiv[2].length >= 6) teamsByDiv[2].slice(-2).forEach(t => move(t.id, 3));
-    if (teamsByDiv[3].length >= 2) teamsByDiv[3].slice(0, 2).forEach(t => move(t.id, 2));
-    if (teamsByDiv[3].length >= 6) teamsByDiv[3].slice(-2).forEach(t => move(t.id, 4));
-    if (teamsByDiv[4].length >= 2) teamsByDiv[4].slice(0, 2).forEach(t => move(t.id, 3));
+    // Ajuste de lógica de ascenso/descenso con los nuevos IDs
+    if (teamsByDiv[5].length >= 4) teamsByDiv[5].slice(-2).forEach(t => move(t.id, 6));
+    if (teamsByDiv[6].length >= 2) teamsByDiv[6].slice(0, 2).forEach(t => move(t.id, 5));
+    if (teamsByDiv[6].length >= 6) teamsByDiv[6].slice(-2).forEach(t => move(t.id, 7));
+    if (teamsByDiv[7].length >= 2) teamsByDiv[7].slice(0, 2).forEach(t => move(t.id, 6));
+    if (teamsByDiv[7].length >= 6) teamsByDiv[7].slice(-2).forEach(t => move(t.id, 8));
+    if (teamsByDiv[8].length >= 2) teamsByDiv[8].slice(0, 2).forEach(t => move(t.id, 7));
 
     return newTeams.map(team => ({
       ...team,
@@ -298,7 +300,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      // RECUPERACIÓN DE DATOS FALTANTES (CORRECCIÓN CON ANY PARA EVITAR ERROR TYPESCRIPT)
+      // AJUSTE: Paracaídas de seguridad para IDs. Buscamos el seasonId si no está en el estado.
       let seasonValue = currentSeasonId || (nextMatch as any).season_id;
       
       if (!seasonValue) {
@@ -306,7 +308,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         if (activeSeason) seasonValue = activeSeason.id;
       }
 
-      // Obtenemos el leagueId de la tabla leagues (Titan League es ID 1)
+      // AJUSTE: Buscamos el leagueId real de tu tabla (ID 1)
       const { data: leagueData } = await supabase.from('leagues').select('id').limit(1).single();
       const leagueIdToSend = (nextMatch as any).league_id || (leagueData ? leagueData.id : 1);
 
@@ -323,7 +325,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             divisionId: String(nextMatch.division_id), 
             week: Number(nextMatch.matchday || 1), 
             sessionId: String(sessionId), 
-            seasonId: Number(seasonValue),
+            seasonId: Number(seasonValue), // Ahora se envía el seasonId correctamente
             leagueId: Number(leagueIdToSend)
           }) 
         });
