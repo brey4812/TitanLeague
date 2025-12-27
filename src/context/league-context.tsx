@@ -33,7 +33,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     return '';
   });
 
-  // AJUSTE: Sincronización con los IDs reales de tu tabla 'divisions' (5, 6, 7, 8)
   const divisions: Division[] = [
     { id: 5, name: "Titan Prime Division" },
     { id: 6, name: "Second Division" },
@@ -46,8 +45,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const savedTeamsRaw = localStorage.getItem('league_active_teams');
       if (savedTeamsRaw) {
         let parsedTeams: Team[] = JSON.parse(savedTeamsRaw);
-        
-        // --- AUTO-MIGRACIÓN DE EQUIPOS (Para que vuelvan a aparecer) ---
         const migratedTeams = parsedTeams.map(t => {
           if (t.division_id === 1) return { ...t, division_id: 5 };
           if (t.division_id === 2) return { ...t, division_id: 6 };
@@ -59,27 +56,26 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       }
       
       const [matchesRes, eventsRes, seasonRes] = await Promise.all([
-        supabase.from('matches')
-          .select('*')
-          .eq('session_id', sessionId)
-          .order('matchday', { ascending: true }), 
+        supabase.from('matches').select('*').eq('session_id', sessionId).order('matchday', { ascending: true }), 
         supabase.from('match_events').select('*').eq('session_id', sessionId),
         supabase.from('seasons').select('id, season_number').eq('is_active', true).maybeSingle()
       ]);
 
       if (seasonRes.data) {
-        setCurrentSeason(Number(seasonRes.data.season_number) || 1);
+        setCurrentSeason(Number(seasonRes.data.season_number));
         setCurrentSeasonId(Number(seasonRes.data.id));
+      } else {
+        // --- CORRECCIÓN RESETEO: Si no hay temporada activa, la creamos ---
+        const { data: newS } = await supabase.from('seasons').insert([{ season_number: 1, is_active: true }]).select().single();
+        if (newS) {
+          setCurrentSeason(1);
+          setCurrentSeasonId(newS.id);
+        }
       }
       
       if (matchesRes.data) {
-        const normalized = matchesRes.data.map(m => ({
-          ...m,
-          round: m.matchday 
-        }));
-        setMatches(normalized);
+        setMatches(matchesRes.data.map(m => ({ ...m, round: m.matchday })));
       }
-      
       if (eventsRes.data) setMatchEvents(eventsRes.data);
     } catch (error) {
       console.error("Error refreshData Titán:", error);
@@ -214,7 +210,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { 
     const timer = setTimeout(() => { if (isLoaded) autoMatchmaker(); }, 2000);
     return () => clearTimeout(timer);
-  }, [teams.length, isLoaded, autoMatchmaker]);
+  }, [teams.length, isLoaded, autoMatchmaker, currentSeasonId]);
 
   const isSeasonFinished = useMemo(() => {
     if (!isLoaded || matches.length === 0) return false;
@@ -246,7 +242,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       });
 
       const updatedRoster = (team.roster || []).map(player => {
-        const playerStats = player.stats || { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 };
         const ratings: number[] = []; 
         teamMatches.forEach(match => {
           const events = matchEvents.filter(e => String(e.match_id) === String(match.id));
@@ -256,20 +251,19 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         });
         
         const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
-        const pAssists = matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name));
         
         return {
           ...player,
           rating: ratings.length > 0 ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)) : 6.0,
           stats: { 
-            ...playerStats,
             goals: pEvents.filter(e => e.type === 'GOAL').length, 
-            assists: pAssists.length,
+            assists: matchEvents.filter(e => e.type === 'ASSIST' && String(e.player_id) === String(player.id)).length,
             cleanSheets: matchEvents.filter(e => e.type === 'CLEAN_SHEET' && String(e.player_id) === String(player.id)).length,
             cards: {
               yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
               red: pEvents.filter(e => e.type === 'RED_CARD' || e.type === 'SECOND_YELLOW').length
-            }
+            },
+            mvp: 0
           }
         };
       });
@@ -322,21 +316,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const nextMatch = matches.find(m => m.played === false);
       if (!nextMatch) return alert("No hay más jornadas.");
 
-      let seasonValue = currentSeasonId || (nextMatch as any).season_id;
-      
-      if (!seasonValue) {
-        const { data: activeSeason } = await supabase.from('seasons').select('id').eq('is_active', true).maybeSingle();
-        if (activeSeason) seasonValue = activeSeason.id;
-      }
-
-      const { data: leagueData } = await supabase.from('leagues').select('id').limit(1).single();
-      const leagueIdToSend = (nextMatch as any).league_id || (leagueData ? leagueData.id : 1);
-
-      if (!seasonValue || !sessionId) {
-        alert("Error: Sesión o Temporada no detectada. Recarga la página.");
-        return;
-      }
-
       try {
         const res = await fetch("/api/match/simulate-matchday", { 
           method: "POST", 
@@ -345,8 +324,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
             divisionId: String(nextMatch.division_id), 
             week: Number(nextMatch.matchday || 1), 
             sessionId: String(sessionId), 
-            seasonId: Number(seasonValue),
-            leagueId: Number(leagueIdToSend)
+            seasonId: Number(currentSeasonId)
           }) 
         });
 
@@ -387,7 +365,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         try {
           await supabase.from('match_events').delete().eq('session_id', sessionId);
           await supabase.from('matches').delete().eq('session_id', sessionId);
-          localStorage.clear(); 
+          // IMPORTANTE: NO borramos localStorage para no perder los equipos, solo recargamos
           window.location.reload(); 
         } catch (error) {
           console.error(error);
