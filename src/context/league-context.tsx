@@ -247,7 +247,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       const updatedRoster = (team.roster || []).map(player => {
         const playerStats = player.stats || { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 };
-        const ratings: number[] = [];
+        const ratings: number[] = []; // Corregido el carácter '0' que había aquí
         teamMatches.forEach(match => {
           const events = matchEvents.filter(e => String(e.match_id) === String(match.id));
           const isHome = String(match.home_team) === String(team.id);
