@@ -130,11 +130,13 @@ export async function POST(req: Request) {
       const homeRoster = allPlayers?.filter(p => String(p.team_id) === String(match.home_team)) || [];
       const awayRoster = allPlayers?.filter(p => String(p.team_id) === String(match.away_team)) || [];
 
+      // Titulares: Filtrar sancionados y tomar máximo 11
       let activeHome = homeRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(0, 11);
       let activeAway = awayRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(0, 11);
 
-      let benchHome = homeRoster.slice(11);
-      let benchAway = awayRoster.slice(11);
+      // Banca: Jugadores restantes no sancionados
+      let benchHome = homeRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(11);
+      let benchAway = awayRoster.filter(p => !sanctionedIds.has(String(p.id))).slice(11);
 
       const yellowCards: Record<string, number> = {};
       let homeGoals = 0;
@@ -192,7 +194,7 @@ export async function POST(req: Request) {
             const target = actives[targetIdx];
 
             if (Math.random() < 0.15) {
-              // Roja directa
+              // Roja directa - Expulsión inmediata de la simulación
               currentMatchEvents.push({
                 match_id: match.id,
                 team_id: teamId,
@@ -213,6 +215,7 @@ export async function POST(req: Request) {
               yellowCards[target.id] = (yellowCards[target.id] || 0) + 1;
 
               if (yellowCards[target.id] === 2) {
+                // Segunda amarilla - Expulsión inmediata
                 currentMatchEvents.push({
                   match_id: match.id,
                   team_id: teamId,
@@ -242,7 +245,7 @@ export async function POST(req: Request) {
             }
           }
 
-          // Lógica de Cambios
+          // Lógica de Cambios (Si hay banca disponible)
           if (min > 60 && min < 85 && Math.random() < 0.01 && bench.length > 0) {
             const pOutIdx = Math.floor(Math.random() * actives.length);
             const pOut = actives[pOutIdx];
@@ -270,7 +273,7 @@ export async function POST(req: Request) {
         });
       }
 
-      // Lógica de Portería a Cero (Clean Sheet)
+      // Lógica de Portería a Cero (Clean Sheet) - Solo si el equipo contrario no marcó
       if (awayGoals === 0) {
         const gk = homeRoster.find(p => 
           p.position?.toLowerCase().includes("goalkeeper") || 
@@ -307,8 +310,8 @@ export async function POST(req: Request) {
         }
       }
 
-      // 7. Actualizar Partido
-      await supabase
+      // 7. Actualizar Partido y Guardar Eventos secuencialmente
+      const { error: updateError } = await supabase
         .from("matches")
         .update({
           home_goals: homeGoals,
@@ -318,14 +321,15 @@ export async function POST(req: Request) {
         })
         .eq("id", match.id);
 
-      // Inserción de Eventos (Compatibilidad exacta con columnas player_name y assist_name)
+      if (updateError) console.error("Error actualizando partido:", updateError.message);
+
       if (currentMatchEvents.length > 0) {
         const { error: insError } = await supabase
           .from("match_events")
           .insert(currentMatchEvents);
         
         if (insError) {
-          console.error("Error insertando eventos:", insError.message);
+          console.error("Error insertando eventos en match_id:", match.id, insError.message);
         }
       }
     }
