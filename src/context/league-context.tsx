@@ -45,6 +45,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const savedTeamsRaw = localStorage.getItem('league_active_teams');
       if (savedTeamsRaw) {
         let parsedTeams: Team[] = JSON.parse(savedTeamsRaw);
+        
         const migratedTeams = parsedTeams.map(t => {
           if (t.division_id === 1) return { ...t, division_id: 5 };
           if (t.division_id === 2) return { ...t, division_id: 6 };
@@ -65,7 +66,6 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         setCurrentSeason(Number(seasonRes.data.season_number));
         setCurrentSeasonId(Number(seasonRes.data.id));
       } else {
-        // --- AUTO-RECUPERACIÓN: Si no hay temporada tras resetear, la creamos ---
         const { data: newS } = await supabase.from('seasons').insert([{ season_number: 1, is_active: true }]).select().single();
         if (newS) {
           setCurrentSeason(1);
@@ -224,12 +224,9 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
-      
-      // FILTRO CORREGIDO: Buscamos partidos de esta sesión y de esta temporada
       const teamMatches = matches.filter(m => 
         m.played && 
-        String(m.session_id) === String(sessionId) &&
-        String(m.season_id) === String(currentSeasonId) && 
+        (currentSeasonId ? String(m.season_id) === String(currentSeasonId) : true) &&
         (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id))
       );
       
@@ -253,16 +250,15 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           ratings.push(calculatePlayerRating(player, events, cleanSheet));
         });
         
-        // FILTRO EVENTOS CORREGIDO: Mapeamos tanto player_id como session_id
-        const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id) && String(e.session_id) === String(sessionId));
+        const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
         
         return {
           ...player,
           rating: ratings.length > 0 ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)) : 6.0,
           stats: { 
             goals: pEvents.filter(e => e.type === 'GOAL').length, 
-            assists: pEvents.filter(e => e.type === 'ASSIST').length,
-            cleanSheets: pEvents.filter(e => e.type === 'CLEAN_SHEET').length,
+            assists: matchEvents.filter(e => e.type === 'ASSIST' && String(e.player_id) === String(player.id)).length,
+            cleanSheets: matchEvents.filter(e => e.type === 'CLEAN_SHEET' && String(e.player_id) === String(player.id)).length,
             cards: {
               yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
               red: pEvents.filter(e => e.type === 'RED_CARD' || e.type === 'SECOND_YELLOW').length
@@ -274,7 +270,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
 
       return { ...team, stats, points: stats.points, roster: updatedRoster };
     });
-  }, [teams, matches, matchEvents, currentSeasonId, isLoaded, sessionId]);
+  }, [teams, matches, matchEvents, currentSeasonId, isLoaded]);
 
   const value: LeagueContextType = {
     teams: processedTeams,
@@ -300,12 +296,24 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const { data: nextS } = await supabase.from('seasons').insert([{ season_number: currentSeason + 1, is_active: true }]).select().single();
       if (nextS) {
         await supabase.from('seasons').update({ is_active: false }).eq('id', currentSeasonId);
-        await refreshData();
+        setCurrentSeason(nextS.season_number);
+        setCurrentSeasonId(nextS.id);
+        setMatches([]);
+        setMatchEvents([]);
         alert(`Temporada ${nextS.season_number} iniciada.`);
       }
     },
     addTeam: (t) => setTeams(prev => [...prev, t]),
-    deleteTeam: (id) => setTeams(prev => prev.filter(t => String(t.id) !== String(id))),
+    
+    // 1️⃣ ARREGLO deleteTeam: Ahora limpia el localStorage
+    deleteTeam: (id) => {
+      setTeams(prev => {
+        const updated = prev.filter(t => String(t.id) !== String(id));
+        localStorage.setItem('league_active_teams', JSON.stringify(updated));
+        return updated;
+      });
+    },
+
     updateTeam: (u) => setTeams(prev => prev.map(t => String(t.id) === String(u.id) ? u : t)),
     addPlayerToTeam: (tid, p) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: [...(t.roster || []), p]} : t)),
     removePlayerFromTeam: (tid, pid) => setTeams(prev => prev.map(t => String(t.id) === String(tid) ? {...t, roster: (t.roster || []).filter(p => String(p.id) !== String(pid))} : t)),
@@ -345,8 +353,8 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         .filter(e => String(e.match_id) === String(id))
         .map(e => ({ 
             ...e, 
-            playerName: (e as any).player_name || (e as any).playerName, 
-            assistName: (e as any).assist_name || (e as any).assistName 
+            playerName: e.player_name || (e as any).playerName, 
+            assistName: e.assist_name || (e as any).assistName 
         })),
     getTeamOfTheWeek: (w) => {
       const weekM = matches.filter(m => m.round === w && m.played);
@@ -361,12 +369,18 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     },
     getSeasonAwards: () => ({ pichichi: undefined, assistMaster: undefined, bestGoalkeeper: undefined }),
     drawTournament: async (n) => { console.log("Sorteando torneo:", n); }, 
+
+    // 2️⃣ ARREGLO resetLeagueData: Limpieza real de equipos del localStorage y estado
     resetLeagueData: async () => { 
       if(confirm("¿Resetear todos los datos?")) { 
         try {
           await supabase.from('match_events').delete().eq('session_id', sessionId);
           await supabase.from('matches').delete().eq('session_id', sessionId);
-          // IMPORTANTE: Recargamos para que el autoMatchmaker actúe sobre la nueva temporada
+          
+          // 🔥 LIMPIEZA REAL DE EQUIPOS
+          localStorage.removeItem('league_active_teams');
+          setTeams([]);
+
           window.location.reload(); 
         } catch (error) {
           console.error(error);
@@ -374,6 +388,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         }
       } 
     },
+
     importLeagueData: (newData) => { localStorage.setItem('league_active_teams', JSON.stringify(newData)); setTeams(newData); return true; },
     refreshData
   };

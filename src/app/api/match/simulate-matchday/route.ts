@@ -289,12 +289,16 @@ export async function POST(req: Request) {
 
       // LUEGO insertamos los eventos y ESPERAMOS a que termine (usando await)
       if (currentMatchEvents.length > 0) {
-        const { error: insError } = await supabase
-          .from("match_events")
-          .insert(currentMatchEvents);
-        
-        if (insError) {
-          console.error(`Error en match_id ${match.id}:`, insError.message);
+      const orderedEvents = currentMatchEvents.sort(
+        (a, b) => a.minute - b.minute
+        );
+
+      const { error: insError } = await supabase
+    .from("match_events")
+    .insert(orderedEvents);
+
+      if (insError) {
+        console.error(`Error en match_id ${match.id}:`, insError.message);
         }
       }
     }
