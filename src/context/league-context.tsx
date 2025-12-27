@@ -246,20 +246,29 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       });
 
       const updatedRoster = (team.roster || []).map(player => {
-        const playerStats = player.stats || { goals: 0, assists: 0, cleanSheets: 0, cards: { yellow: 0, red: 0 }, mvp: 0 };
-        const ratings: number[] = []; // Corregido el carácter '0' que había aquí
+        const ratings: number[] = []; 
         teamMatches.forEach(match => {
           const events = matchEvents.filter(e => String(e.match_id) === String(match.id));
           const isHome = String(match.home_team) === String(team.id);
           const cleanSheet = (isHome ? Number(match.away_goals) : Number(match.home_goals)) === 0;
           ratings.push(calculatePlayerRating(player, events, cleanSheet));
         });
+        
         const pEvents = matchEvents.filter(e => String(e.player_id) === String(player.id));
-        const pAssists = matchEvents.filter(e => e.type === 'ASSIST' && (String(e.player_id) === String(player.id) || (e as any).assist_name === player.name));
+        
         return {
           ...player,
           rating: ratings.length > 0 ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)) : 6.0,
-          stats: { ...playerStats, goals: pEvents.filter(e => e.type === 'GOAL').length, assists: pAssists.length }
+          stats: { 
+            goals: pEvents.filter(e => e.type === 'GOAL').length, 
+            assists: pEvents.filter(e => e.type === 'ASSIST').length,
+            cleanSheets: pEvents.filter(e => e.type === 'CLEAN_SHEET').length,
+            cards: {
+              yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
+              red: pEvents.filter(e => e.type === 'RED_CARD' || e.type === 'SECOND_YELLOW').length
+            },
+            mvp: 0 
+          }
         };
       });
 
