@@ -150,7 +150,7 @@ export async function POST(req: Request) {
 
           if (actives.length === 0) return;
 
-          // Lógica de Goles (0.75% probabilidad por minuto)
+          // Lógica de Goles
           if (Math.random() < 0.0075) {
             const scorerIdx = Math.floor(Math.random() * actives.length);
             const scorer = actives[scorerIdx];
@@ -171,7 +171,7 @@ export async function POST(req: Request) {
               session_id: sessionId
             });
 
-            // Lógica de Asistencias (70% de probabilidad)
+            // Lógica de Asistencias
             if (Math.random() < 0.7 && actives.length > 1) {
               const others = actives.filter(p => p.id !== scorer.id);
               const asst = others[Math.floor(Math.random() * others.length)];
@@ -188,13 +188,13 @@ export async function POST(req: Request) {
             }
           }
 
-          // Lógica de Tarjetas (0.2% probabilidad por minuto)
+          // Lógica de Tarjetas
           if (Math.random() < 0.002) {
             const targetIdx = Math.floor(Math.random() * actives.length);
             const target = actives[targetIdx];
 
             if (Math.random() < 0.15) {
-              // Roja directa - Expulsión inmediata de la simulación
+              // Roja directa
               currentMatchEvents.push({
                 match_id: match.id,
                 team_id: teamId,
@@ -215,7 +215,6 @@ export async function POST(req: Request) {
               yellowCards[target.id] = (yellowCards[target.id] || 0) + 1;
 
               if (yellowCards[target.id] === 2) {
-                // Segunda amarilla - Expulsión inmediata
                 currentMatchEvents.push({
                   match_id: match.id,
                   team_id: teamId,
@@ -245,7 +244,7 @@ export async function POST(req: Request) {
             }
           }
 
-          // Lógica de Cambios (Si hay banca disponible)
+          // Lógica de Cambios
           if (min > 60 && min < 85 && Math.random() < 0.01 && bench.length > 0) {
             const pOutIdx = Math.floor(Math.random() * actives.length);
             const pOut = actives[pOutIdx];
@@ -273,7 +272,7 @@ export async function POST(req: Request) {
         });
       }
 
-      // Lógica de Portería a Cero (Clean Sheet) - Solo si el equipo contrario no marcó
+      // Lógica de Portería a Cero
       if (awayGoals === 0) {
         const gk = homeRoster.find(p => 
           p.position?.toLowerCase().includes("goalkeeper") || 
@@ -310,8 +309,9 @@ export async function POST(req: Request) {
         }
       }
 
-      // 7. Actualizar Partido y Guardar Eventos secuencialmente
-      const { error: updateError } = await supabase
+      // 7. Actualización de Base de Datos (SINCRONIZADA)
+      // Actualizamos el marcador del partido
+      const { error: updErr } = await supabase
         .from("matches")
         .update({
           home_goals: homeGoals,
@@ -321,22 +321,21 @@ export async function POST(req: Request) {
         })
         .eq("id", match.id);
 
-      if (updateError) console.error("Error actualizando partido:", updateError.message);
+      if (updErr) console.error("Error al actualizar partido:", updErr.message);
 
+      // Insertamos todos los eventos generados para este partido
       if (currentMatchEvents.length > 0) {
-        const { error: insError } = await supabase
+        const { error: insErr } = await supabase
           .from("match_events")
           .insert(currentMatchEvents);
         
-        if (insError) {
-          console.error("Error insertando eventos en match_id:", match.id, insError.message);
-        }
+        if (insErr) console.error("Error al insertar eventos:", insErr.message);
       }
     }
 
     return NextResponse.json({ 
       ok: true, 
-      message: `Jornada ${week} simulada con éxito.` 
+      message: `Jornada simulada con éxito.` 
     });
 
   } catch (err: any) {

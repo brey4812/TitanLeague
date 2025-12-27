@@ -45,6 +45,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       const savedTeamsRaw = localStorage.getItem('league_active_teams');
       if (savedTeamsRaw) {
         let parsedTeams: Team[] = JSON.parse(savedTeamsRaw);
+        
         const migratedTeams = parsedTeams.map(t => {
           if (t.division_id === 1) return { ...t, division_id: 5 };
           if (t.division_id === 2) return { ...t, division_id: 6 };
@@ -65,7 +66,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         setCurrentSeason(Number(seasonRes.data.season_number));
         setCurrentSeasonId(Number(seasonRes.data.id));
       } else {
-        // --- CORRECCIÓN RESETEO: Si no hay temporada activa, la creamos ---
+        // --- CORRECCIÓN CRÍTICA: Si no hay temporada tras resetear, la creamos ---
         const { data: newS } = await supabase.from('seasons').insert([{ season_number: 1, is_active: true }]).select().single();
         if (newS) {
           setCurrentSeason(1);
@@ -224,9 +225,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     
     return teams.map(team => {
       const stats = { wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
+      // --- CORRECCIÓN: Si currentSeasonId es nulo, usamos un filtro que no bloquee los equipos ---
       const teamMatches = matches.filter(m => 
         m.played && 
-        String(m.season_id) === String(currentSeasonId) && 
+        (currentSeasonId ? String(m.season_id) === String(currentSeasonId) : true) &&
         (String(m.home_team) === String(team.id) || String(m.away_team) === String(team.id))
       );
       
@@ -365,7 +367,7 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
         try {
           await supabase.from('match_events').delete().eq('session_id', sessionId);
           await supabase.from('matches').delete().eq('session_id', sessionId);
-          // IMPORTANTE: NO borramos localStorage para no perder los equipos, solo recargamos
+          // IMPORTANTE: NO borramos localStorage para no perder los equipos, pero forzamos recarga
           window.location.reload(); 
         } catch (error) {
           console.error(error);
