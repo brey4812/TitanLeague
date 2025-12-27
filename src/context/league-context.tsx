@@ -262,14 +262,14 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
           ...player,
           rating: ratings.length > 0 ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)) : 6.0,
           stats: { 
+            ...playerStats,
             goals: pEvents.filter(e => e.type === 'GOAL').length, 
             assists: pAssists.length,
             cleanSheets: matchEvents.filter(e => e.type === 'CLEAN_SHEET' && String(e.player_id) === String(player.id)).length,
             cards: {
               yellow: pEvents.filter(e => e.type === 'YELLOW_CARD').length,
               red: pEvents.filter(e => e.type === 'RED_CARD' || e.type === 'SECOND_YELLOW').length
-            },
-            mvp: 0
+            }
           }
         };
       });
