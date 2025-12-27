@@ -308,6 +308,7 @@ export async function POST(req: Request) {
       }
 
       // 7. Actualizar Partido y Guardar Eventos
+      // CORRECCIÓN: Nos aseguramos de actualizar primero el partido y luego insertar los eventos
       await supabase
         .from("matches")
         .update({
@@ -324,7 +325,7 @@ export async function POST(req: Request) {
           .insert(currentMatchEvents);
         
         if (insError) {
-          console.error("Error insertando eventos:", insError.message);
+          console.error("Error insertando eventos en match_id:", match.id, insError.message);
         }
       }
     }
